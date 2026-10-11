@@ -221,6 +221,44 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 
 .bg-cloth{background:var(--cloth)} .bg-wood{background:var(--wood)} .bg-clay{background:var(--clay)}
 .bg-tin{background:var(--tin)} .bg-glass{background:var(--glass)} .bg-plastic{background:var(--plastic)}
+/* ---------- the start-of-turn popup ---------- */
+#recap{position:fixed;inset:0;z-index:55;background:rgba(20,15,12,.72);display:none;align-items:center;justify-content:center;padding:14px}
+#recap.on{display:flex}
+#recap .sheet{max-width:560px;width:100%;max-height:88vh;overflow:auto;margin:0;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+#recap h2{font-size:20px}
+#recap .q{font-weight:700;margin:12px 0 5px}
+#recap ul{margin:0;padding-left:19px} #recap li{margin:2px 0}
+#recap .drew{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+#recap .drew>div{width:128px;flex:none} #recap .drew>div.matcard{width:74px}
+#recap .row{margin-top:14px}
+
+/* ---------- things happening on the table ----------
+   A card that just reached your hand drops in and keeps a NEW tag for the rest of the turn.
+   A character that loses materials shakes. One that breaks stays a moment, stamped BROKEN,
+   then falls away, so an empty slot never just appears from nowhere.                    */
+.hc{position:relative}
+.newtag{position:absolute;left:-6px;top:-9px;z-index:7;background:#F2C230;color:#2A211C;font-size:11px;font-weight:800;
+  letter-spacing:.08em;padding:2px 8px;border-radius:9px;box-shadow:0 2px 5px rgba(0,0,0,.5);pointer-events:none}
+.hc.new{box-shadow:0 0 0 3px #F2C230, 0 4px 16px rgba(242,194,48,.6)}
+.hc.arrive{animation:arrive .7s cubic-bezier(.2,.9,.3,1.2) both}
+@keyframes arrive{0%{transform:translateY(-70px) scale(.7) rotate(-6deg);opacity:0}100%{transform:none;opacity:1}}
+.slot.hit{animation:hit .45s}
+@keyframes hit{0%,100%{transform:none}20%{transform:translateX(-7px) rotate(-1.5deg)}40%{transform:translateX(7px) rotate(1.5deg)}
+  60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+.ghost{position:absolute;left:0;right:0;top:0;z-index:5;pointer-events:none;animation:broke 2s ease-in both}
+.ghost .stamp{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%) rotate(-12deg);z-index:8;
+  background:#A8322A;color:#fff;font-weight:800;font-size:20px;letter-spacing:.14em;padding:5px 14px;border-radius:6px;
+  border:2px solid #fff;box-shadow:0 3px 9px rgba(0,0,0,.6);white-space:nowrap}
+@keyframes broke{0%{opacity:1;transform:none;filter:none}10%{transform:translateX(-8px) rotate(-2deg)}
+  20%{transform:translateX(8px) rotate(2deg)}30%{transform:none;filter:saturate(.3) brightness(.85)}
+  70%{opacity:1;transform:rotate(3deg);filter:saturate(0) brightness(.6)}
+  100%{opacity:0;transform:translateY(40px) rotate(9deg) scale(.92);filter:saturate(0) brightness(.5)}}
+@media (prefers-reduced-motion:reduce){
+  .hc.arrive,.slot.hit{animation:none}
+  .ghost{animation:brokeCalm 2s linear both}
+}
+@keyframes brokeCalm{0%,70%{opacity:1}100%{opacity:0}}
+
 /* ---------- phones ----------
    One column. Each shelf and the hand become a row you swipe sideways, so a card stays
    big enough to read and its moves big enough to tap. The top bar sticks, so End turn
@@ -271,6 +309,7 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 <body>
 <div id="menu"></div>
 <div id="pass"></div>
+<div id="recap"></div>
 <div id="zoom"></div>
 <div class="wrap">
   <div>
@@ -520,6 +559,7 @@ let HOTSEAT = false;
 let ONLINE = false, NAMES = {me:'You', opp:'Opponent'};
 const SHARED = () => HOTSEAT || ONLINE;      // the log is read by both players
 function newGame(){
+  FX.reset=true; RECAP_MARK=0; RECAP=null; hideRecap();
   const mine = YOUR_DECK, theirs = pickBotDeck(mine);
   G={you:newPlayer(mine,false), bot:newPlayer(theirs,!SHARED()), turn:1, actor:'you', moves:3, log:[]};
   G.you.seat=1; G.bot.seat=2;
@@ -540,7 +580,7 @@ function newGame(){
 }
 function say(who,txt){
   if(SHARED() && who==='you'){ who = G.you.seat===1?'you':'bot'; txt = G.you.label+': '+txt; }
-  G.log.unshift({who,txt});
+  G.log.unshift({who,txt,n:(G.log[0]&&G.log[0].n||0)+1});
 }
 
 function drawMain(p,silent){
@@ -743,6 +783,9 @@ function startTurn(){
         say('sys',`Underneath: ${ch.name} is patched with a Clay.`); }
     }
   } });
+  // For the start-of-turn popup: what was logged since this player last had the table, and
+  // where their hand ended before drawing.
+  if(!p.isBot){ RECAP={lines:G.log.filter(l=>(l.n||0)>RECAP_MARK).reverse().map(l=>l.txt), h0:p.hand.length}; }
   // draw
   // One main-deck card is mandatory — otherwise you could dodge deck-out forever
   // by only ever taking materials, and a whole win condition stops existing.
@@ -798,6 +841,45 @@ function afterDraw(p){
   }
   if(p.isBot) setTimeout(botTurn,420);
   render();
+  if(!p.isBot && !over){ showRecap(p); if(HOTSEAT) RECAP_MARK=logTop(); }
+}
+/* The popup at the start of your turn: what the other side just did, and what you drew. */
+let RECAP=null, RECAP_MARK=0;
+/* How a log line is shown: the two sides are "you" and "opponent", never "bot" or a deck's name. */
+function plain(txt){
+  const me=G.you.name, them=G.bot.name;          // deck names are plain words, safe to split on
+  txt=String(txt).replace(/\bthe bot\b/g,'your opponent').replace(/\bBot\b/g,'Opponent');
+  if(txt.indexOf('Game start')===0) return txt;  // the one line that should name the decks
+  return txt
+    .split(me+' wins').join('You win').split(me+' loses').join('You lose')
+    .split(me+' takes').join('You take').split(me+' grows').join('You grow').split(me+' builds').join('You build')
+    .split(me).join('you').split(them).join('Opponent');
+}
+const logTop=()=>G.log[0]&&G.log[0].n||0;
+function hideRecap(){ const r=document.getElementById('recap'); if(r&&r.replaceChildren){ r.className=''; r.replaceChildren(); } }
+function showRecap(p){
+  if(typeof window==='undefined' || !RECAP) return;
+  const r=document.getElementById('recap'); r.replaceChildren(); r.className='on';
+  const sh=el('div',null,'sheet');
+  sh.appendChild(el('h2',(HOTSEAT?p.label+', your turn':'Your turn')+' — turn '+G.turn));
+  const other=opp(p), who=SHARED()?other.label:'your opponent';
+  if(RECAP.lines.length){
+    sh.appendChild(el('div','What '+who+' did','q'));
+    const ul=el('ul'); RECAP.lines.slice(-14).forEach(t=>ul.appendChild(el('li',plain(t)))); sh.appendChild(ul);
+  }
+  const drew=p.hand.slice(RECAP.h0);
+  if(drew.length){
+    sh.appendChild(el('div','You drew','q'));
+    const row=el('div',null,'drew');
+    drew.forEach(c=>{ const d=el('div'); if(c.mat){ d.className='matcard'; d.appendChild(materialFace(c.mat)); } else d.appendChild(cardFace(c)); row.appendChild(d); });
+    sh.appendChild(row);
+  }
+  if(p.rush) sh.appendChild(el('div','Rebuild: you lost every character, so you have 4 moves this turn and what you build may act straight away.','q'));
+  const row=el('div',null,'row'); row.appendChild(el('button','OK','go')); sh.appendChild(row);
+  r.appendChild(sh);
+  // Closing it replays any break that happened behind it.
+  r.onclick=()=>{ hideRecap(); const t=Date.now(); FX.ghosts.forEach(g=>g.t=t); render(); };
+  fitCards(r);
 }
 /* The cover between turns. Nothing behind it is visible, so hands stay secret. */
 function showPass(first){
@@ -820,6 +902,7 @@ function endTurn(){
   cur().shelf.forEach(ch=>{ if(ch) ch.smothered=false; });
   opp(cur()).shelf.forEach(ch=>{ if(ch) ch.marked=false; });
   if(ONLINE){                                   // hand the table to the other player's browser
+    RECAP_MARK=logTop();
     if(G.you.seat===2) G.turn++;
     G.actor='bot'; G.moves=0; render();
     netSend({t:'msg',data:{k:'end',s:snapshot()}});
@@ -830,7 +913,7 @@ function endTurn(){
     if(G.you.seat===1) G.turn++;
     G.moves=0; showPass(false); return;          // their turn starts when they uncover the table
   }
-  if(G.actor==='you'){ G.actor='bot'; } else { G.actor='you'; G.turn++; }
+  if(G.actor==='you'){ RECAP_MARK=logTop(); G.actor='bot'; } else { G.actor='you'; G.turn++; }
   startTurn();
 }
 
@@ -1130,12 +1213,21 @@ function botTurn(){
   botSalvage(p);
   botScrap(p);
   botMelt(p);
-  let guard=0;
-  while(G.moves>0 && !over && guard++<12){
-    if(botAct(p,e)) { render(); } else break;
-  }
-  if(!over){ render(); setTimeout(()=>{ if(!over) endTurn(); },380); }
+  render();
+  // One action, a pause, the next action — so you can watch the turn instead of finding
+  // the table changed. Every step first checks this is still the same game and still the
+  // bot's turn, in case New game or the menu was used during a pause.
+  const g=G; let guard=0;
+  const mine=()=>G===g && !SHARED() && G.actor==='bot';
+  const step=()=>{
+    if(!mine()) return;
+    if(!over && G.moves>0 && guard++<12 && botAct(p,e)){ render(); if(!over) setTimeout(step,BOT_PACE); return; }
+    render();
+    if(!over) setTimeout(()=>{ if(mine()&&!over) endTurn(); },BOT_PACE*0.7);
+  };
+  setTimeout(step,BOT_PACE);
 }
+const BOT_PACE=900;      // milliseconds between the bot's actions
 
 function botAct(p,e){
   // 1. a break is on offer — take the best one
@@ -1495,6 +1587,44 @@ function matEl(m,cls,onclick){
   return d;
 }
 
+/* What changed since the table was last drawn. Nothing in the rules reports "a card was
+   drawn" or "that broke" to the screen, and online the other player only ever receives the
+   finished table, so the screen works it out by comparing with what it showed before.   */
+const GHOST_MS=2000;
+let FX={reset:true,seat:0,actor:'',hand:{},fresh:{},shelf:{},ghosts:[]};
+const hkey=c=>c.mat?'m:'+c.mat:String(c);
+function tableFx(you,bot){
+  const now={}; you.hand.forEach(c=>{ const k=hkey(c); now[k]=(now[k]||0)+1; });
+  const shelfNow={}; [you,bot].forEach(p=>{ shelfNow[p.seat]=p.shelf.map(ch=>ch?{n:ch.name,s:ch.stack.length}:null); });
+  const arrive={}, hit={}, t=Date.now();
+  if(FX.reset||FX.seat!==you.seat){ FX.fresh={}; FX.ghosts=[]; }      // a new game, or the device changed hands
+  else{
+    if(FX.actor==='you'&&G.actor!=='you') FX.fresh={};                 // your turn is over: nothing is new any more
+    for(const k in now){ const d=now[k]-(FX.hand[k]||0); if(d>0){ arrive[k]=d; FX.fresh[k]=(FX.fresh[k]||0)+d; } }
+    for(const k in FX.fresh) if(FX.fresh[k]>(now[k]||0)) FX.fresh[k]=now[k]||0;
+    [you,bot].forEach(p=>{ const was=FX.shelf[p.seat]||[];
+      shelfNow[p.seat].forEach((c,i)=>{ const w=was[i];
+        if(w&&!c) FX.ghosts.push({seat:p.seat,slot:i,name:w.n,t});
+        else if(w&&c&&w.n===c.n&&c.s<w.s) hit[p.seat+':'+i]=1; }); });
+  }
+  FX.reset=false; FX.seat=you.seat; FX.actor=G.actor; FX.hand=now; FX.shelf=shelfNow;
+  FX.ghosts=FX.ghosts.filter(g=>t-g.t<GHOST_MS);
+  return {arrive,hit,t};
+}
+function shelfFx(id,p,fx){
+  const kids=document.getElementById(id).children; if(!kids) return;
+  for(let i=0;i<3;i++){ const e=kids[i]; if(!e) continue;
+    if(fx.hit[p.seat+':'+i]) e.className+=' hit';
+    const g=FX.ghosts.find(g=>g.seat===p.seat&&g.slot===i);
+    if(g&&!p.shelf[i]&&C[g.name]){
+      const gh=document.createElement('div'); gh.className='ghost'; gh.style.animationDelay=(g.t-fx.t)+'ms';
+      gh.appendChild(cardFace(g.name));
+      const st=document.createElement('div'); st.className='stamp'; st.textContent='BROKEN'; gh.appendChild(st);
+      e.appendChild(gh);
+    }
+  }
+}
+
 function chEl(p,slot,isYou){
   const ch=p.shelf[slot];
   const d=document.createElement('div');
@@ -1519,7 +1649,7 @@ function chEl(p,slot,isYou){
     d.className+=' tgt'; d.onclick=()=>{ if(growChar(G.you,sel.i,slot)){G.moves--;} sel=null; render(); };
   }
 
-  const canAct = isYou && !ch.used && !ch.fresh && G.moves>0 && !over && !pend;
+  const canAct = isYou && G.actor==='you' && !ch.used && !ch.fresh && G.moves>0 && !over && !pend;
   d.appendChild(cardFace(ch.name,{
     stack: ch,
     live: mv => canAct && moveLive(ch,mv),
@@ -1567,6 +1697,8 @@ function render(){
   const you=G.you, bot=G.bot;
   document.getElementById('botShelf').replaceChildren(...[0,1,2].map(i=>chEl(bot,i,false)));
   document.getElementById('youShelf').replaceChildren(...[0,1,2].map(i=>chEl(you,i,true)));
+  const fx=tableFx(you,bot), fresh=Object.assign({},FX.fresh);
+  shelfFx('botShelf',bot,fx); shelfFx('youShelf',you,fx);
   document.getElementById('youLabel').textContent = ONLINE ? you.label+' — '+you.name+' (you)' : HOTSEAT ? you.label+' — '+you.name+' (playing now)' : you.name+' (you)';
   document.getElementById('botLabel').textContent = SHARED() ? bot.label+' — '+bot.name : bot.name+' (bot)';
   document.getElementById('youCounts').textContent=
@@ -1597,17 +1729,21 @@ function render(){
       d.replaceChildren(cardFace(c,{extraTag: def.prize ? (SLIM ? 'grow onto any '+def.t : 'grow onto '+def.growFrom)
                                     : payable ? null : 'can’t pay yet'}));
       if(pend&&pend.stage==='scrap') d.className+=' tgt';
-      d.onclick=()=>{ if(over) return;
+      d.onclick=()=>{ if(over||G.actor!=='you') return;
         if(pend&&pend.stage==='scrap'){ scrapFromHand(i); return; }
         if(pend) return;
         sel = (sel&&sel.k==='hand'&&sel.i===i)?null:{k:'hand',i}; render(); };
     } else {
       d.className='hc';
       d.replaceChildren(cardFace(c));
-      d.onclick=()=>{ if(over) return;
+      d.onclick=()=>{ if(over||G.actor!=='you') return;
         if(pend&&pend.stage==='scrap'){ say('sys','Tools and Notions cannot be scrapped. Only characters.'); render(); return; }
         if(pend) return; playItem(i); };
     }
+    const k=hkey(c);
+    if(fresh[k]>0){ fresh[k]--; d.className+=' new';
+      if(fx.arrive[k]>0){ fx.arrive[k]--; d.className+=' arrive'; }
+      const tag=document.createElement('div'); tag.className='newtag'; tag.textContent='NEW'; d.appendChild(tag); }
     h.appendChild(d);
   });
 
@@ -1640,7 +1776,7 @@ function render(){
   sv.disabled = over||G.actor!=='you'||you.salvUsed||!!pend||!you.scrap.length;
 
   const lg=document.getElementById('log'); lg.replaceChildren();
-  G.log.slice(0,80).forEach(l=>{const d=document.createElement('div');d.className=l.who;d.textContent=l.txt;lg.appendChild(d);});
+  G.log.slice(0,80).forEach(l=>{const d=document.createElement('div');d.className=l.who;d.textContent=plain(l.txt);lg.appendChild(d);});
 
   const pr=document.getElementById('prompt');
   pr.replaceChildren();
