@@ -1962,15 +1962,16 @@ function showMenu(){
 }
 /* Who made what. Edit the lines in CREDITS to change the wording. */
 const CREDITS = [
-  ['Made by one person', 'Only the app is made with the help of AI. Everything else — the art, the characters, the game design — is built by hand, by one person.'],
-  ['So what did the AI do?', 'Technical help, not creative. It built this playtest app, and helped tweak, test and give feedback on the rules.'],
+  ['', 'Scrapkin is a one-person passion project. All art and game design is made by hand, by me.'],
+  ['AI disclosure', 'AI helped build this app for playtesting, and test the rules to keep it balanced and working well.'],
+  ['', 'It is in very early development, and things such as art are subject to change.'],
 ];
 function showCredits(){
   const m=document.getElementById('menu'); m.replaceChildren(); m.className='on';
   const box=el('div',null,'menu-box');
   box.appendChild(el('h1','Credits'));
   const sh=el('div',null,'sheet'); sh.style.textAlign='left'; sh.style.marginTop='18px';
-  CREDITS.forEach(([h,t])=>{ sh.appendChild(el('div',h,'q')); sh.appendChild(el('div',t)); });
+  CREDITS.forEach(([h,t],i)=>{ if(h) sh.appendChild(el('div',h,'q')); const d=el('div',t); if(!h&&i) d.style.marginTop='12px'; sh.appendChild(d); });
   box.appendChild(sh);
   const row=el('div',null,'menu-row');
   const back=el('button','Back','go'); back.onclick=showMenu; row.appendChild(back);
