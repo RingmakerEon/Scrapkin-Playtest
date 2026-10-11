@@ -93,10 +93,12 @@ const ITEMS6 = ["Thimble","Lacquer","Sentry Bell","Music Box","Spare Button","Ru
    is shrugged off by the other deck's characters, so immunity stays out of this matchup. */
 const DECKS = {
   cloth: { name:"Soft Goods", focus:"cloth",
+    blurb:"Cloth. Patches itself up and hits harder the more Cloth it keeps.",
     main:["Patch","Socky","Sleepover","Mittens","Starry Pattern","Cotton Dragon","Raggedy Angel"],
     mats:{ cloth:20, wood:8, tin:8 },
     prize:["Hand-Me-Down","Zipper","Hand-Me-Down","Zipper","Beach Ball","Lock"] },
   clay: { name:"Kiln-Fired", focus:"clay",
+    blurb:"Clay. Burns up its own Clay for the biggest hits in the game.",
     main:["Cuppy","Glob","Raku","Rune-Dog","Hot Cup","Crackle","Glimmer"],
     mats:{ clay:20, glass:8, plastic:8 },
     prize:["Gilded Dog","Slipglaze","Gilded Dog","Slipglaze","Beach Ball","Lock"] },

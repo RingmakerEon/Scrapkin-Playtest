@@ -19,10 +19,10 @@ body{
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{
-  background:var(--bg); color:var(--ink); font:14px/1.45 "Trebuchet MS",system-ui,sans-serif;
+  background:var(--bg); color:var(--ink); font:16px/1.45 "Trebuchet MS",system-ui,sans-serif;
   padding:12px; -webkit-font-smoothing:antialiased;
 }
-.wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1fr 300px;gap:12px}
+.wrap{max-width:1400px;margin:0 auto;display:grid;grid-template-columns:1fr 320px;gap:12px}
 @media(max-width:900px){.wrap{grid-template-columns:1fr}}
 
 h1{font-size:18px;letter-spacing:-.01em}
@@ -32,7 +32,7 @@ h1{font-size:18px;letter-spacing:-.01em}
 .pick{font-size:12px;color:var(--soft);display:flex;align-items:center;gap:5px}
 .pick select{font:inherit;font-size:12px;padding:5px 8px;border-radius:7px;background:#3F332B;color:var(--ink);border:1px solid var(--line)}
 button{
-  font:inherit;font-size:13px;padding:6px 12px;border-radius:7px;cursor:pointer;
+  font:inherit;font-size:15px;padding:7px 13px;border-radius:7px;cursor:pointer;
   background:var(--panel2);color:var(--ink);border:1px solid var(--line);
 }
 button:hover:not(:disabled){background:#4A3C33}
@@ -41,15 +41,15 @@ button.go{background:var(--ink);color:var(--bg);border-color:var(--ink);font-wei
 button.warn{border-color:var(--warn);color:var(--warn)}
 
 .side{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
-.log{height:340px;overflow-y:auto;font-size:12px;line-height:1.5;display:flex;flex-direction:column-reverse;gap:2px}
+.log{height:340px;overflow-y:auto;font-size:13.5px;line-height:1.5;display:flex;flex-direction:column-reverse;gap:2px}
 .log div{padding:2px 0;border-bottom:1px solid #3A2E27}
 .log .you{color:var(--good)} .log .bot{color:var(--bad)} .log .sys{color:var(--faint)}
-.stat{display:flex;justify-content:space-between;font-size:12px;color:var(--soft)}
+.stat{display:flex;justify-content:space-between;font-size:14px;color:var(--soft)}
 .stat b{color:var(--ink);font-variant-numeric:tabular-nums}
 
 .zone{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
 .zhead{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px;color:var(--soft);text-transform:uppercase;letter-spacing:.1em}
-.shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.shelf{display:grid;grid-template-columns:repeat(3,minmax(0,310px));justify-content:center;gap:10px}
 
 /* ---------- real card frames ----------------------------------------------
    The frame image is 750x1050 with a transparent window; the art is exactly the
@@ -74,19 +74,19 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 .cf-corner{ position:absolute; left:80%; top:3.8%; width:15%; height:9.1%; z-index:4;
   display:grid; place-items:center; font-weight:700; font-size:6.6cqw; color:#2A211C; }
 .cf-text{ position:absolute; left:8.3%; top:53.8%; width:85%; height:40%; z-index:4;
-  display:flex; flex-direction:column; gap:0.7cqw; padding:1.6cqw 1.8cqw; color:#2A211C; overflow:hidden; }
-.cf-recipe{ font-size:5.2cqw; font-weight:700; letter-spacing:.02em; opacity:.72 }
-.cf-grow{ font-size:4.5cqw; font-style:italic; opacity:.8; margin-top:.4cqw }
-.cf-under{ font-size:4.4cqw; line-height:1.2; opacity:.72; margin-top:.6cqw;
+  display:flex; flex-direction:column; gap:0.7cqw; padding:1.6cqw 1.8cqw; color:#2A211C; overflow:hidden; font-size:5cqw; }
+.cf-recipe{ font-size:1.04em; font-weight:700; letter-spacing:.02em; opacity:.72 }
+.cf-grow{ font-size:.9em; font-style:italic; opacity:.8; margin-top:.4cqw }
+.cf-under{ font-size:.88em; line-height:1.2; opacity:.72; margin-top:.6cqw;
   border-top:1px dashed rgba(0,0,0,.25); padding-top:.6cqw }
 .cf-mv{ border-top:1px solid rgba(0,0,0,.18); padding-top:0.8cqw; }
 .cf-mv.dead{ opacity:.38 }
 .cf-mv.live{ cursor:pointer; border-radius:1.4cqw; }
 .cf-mv.live:hover{ background:rgba(0,0,0,.07) }
-.cf-mvh{ display:flex; align-items:baseline; gap:1.2cqw; font-weight:700; font-size:6cqw; line-height:1.1 }
-.cf-dmg{ margin-left:auto; font-size:6.6cqw }
-.cf-mvt{ font-size:4.9cqw; line-height:1.24; opacity:.75 }
-.cf-tag{ font-size:3.9cqw; padding:0.3cqw 1cqw; border-radius:1cqw; color:#241C18; font-weight:700;
+.cf-mvh{ display:flex; align-items:baseline; gap:1.2cqw; font-weight:700; font-size:1.2em; line-height:1.1 }
+.cf-dmg{ margin-left:auto; font-size:1.1em }
+.cf-mvt{ font-size:.98em; line-height:1.24; opacity:.75 }
+.cf-tag{ font-size:.65em; padding:0.3cqw 1cqw; border-radius:1cqw; color:#241C18; font-weight:700;
   text-transform:uppercase; letter-spacing:.05em }
 .cf-foot{ position:absolute; left:8.3%; bottom:0.2%; width:85%; z-index:4; font-size:4cqw;
   color:#fff; text-shadow:0 0.2cqw 0.5cqw rgba(0,0,0,.55); display:flex; justify-content:space-between; text-transform:uppercase; letter-spacing:.05em }
@@ -130,7 +130,7 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 /* the material stack, drawn as card edges tucked under the character */
 .stack{display:flex;justify-content:center;padding:0 4px;margin-top:-4px}
 .mat{
-  width:38px;height:34px;border-radius:0 0 6px 6px;margin:0 -5px;
+  width:48px;height:42px;border-radius:0 0 6px 6px;margin:0 -5px;
   position:relative;overflow:hidden;cursor:default;
   box-shadow:0 3px 7px rgba(0,0,0,.45);
 }
@@ -138,7 +138,7 @@ button.warn{border-color:var(--warn);color:var(--warn)}
   object-fit:cover;object-position:top center; }
 .mat span{
   position:absolute;left:0;right:0;bottom:2px;text-align:center;
-  font-size:9px;font-weight:700;letter-spacing:.06em;color:#fff;
+  font-size:11px;font-weight:700;letter-spacing:.06em;color:#fff;
   text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);
 }
 .mat.pick{cursor:pointer;outline:2px solid var(--ink);outline-offset:1px;z-index:2}
@@ -157,12 +157,12 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 }
 .mvbtn:hover:not(:disabled){background:#E4D5BF}
 .tool{font-size:10px;color:#8A5A12;font-weight:700;letter-spacing:.03em}
-.note{font-size:10px;color:var(--faint)}
+.note{font-size:12.5px;color:var(--faint)}
 
 .hand{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
 .hc{
   border-radius:9px;overflow:visible;
-  font-size:12px;cursor:pointer;width:152px;
+  font-size:12px;cursor:pointer;width:205px;
   box-shadow:0 4px 10px rgba(0,0,0,.4), inset 0 0 0 1px rgba(0,0,0,.18);
   transition:transform .12s ease;
 }
@@ -180,13 +180,28 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 .hmh{font-size:11px;font-weight:700;display:flex;gap:5px;align-items:center}
 .hmt{font-size:9.5px;color:rgba(0,0,0,.62);line-height:1.3}
 .hunder{font-size:9.5px;color:#8A5A12;font-weight:600;line-height:1.3;margin-top:4px}
-.hc.matcard{ width:132px; }
+.hc.matcard{ width:120px; }
 
 .bg-neutral{background:#8C7B6C}
 .ring{font-size:10.5px;color:var(--soft);line-height:1.6}
 .ring b{color:var(--ink)}
 
-.prompt{background:#463629;border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:7px 10px;font-size:12px;margin-bottom:8px}
+.prompt{background:#463629;border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:9px 12px;font-size:15px;margin-bottom:8px}
+#zoom{position:fixed;right:18px;bottom:18px;width:360px;z-index:50;pointer-events:none;display:none;
+  filter:drop-shadow(0 10px 24px rgba(0,0,0,.7))}
+#menu{position:fixed;inset:0;z-index:60;background:rgba(30,23,19,.97);display:none;
+  align-items:center;justify-content:center;padding:18px;overflow:auto}
+#menu.on{display:flex}
+.menu-box{max-width:660px;width:100%;text-align:center}
+.menu-box h1{font-size:44px;letter-spacing:-.02em;margin-bottom:2px}
+.menu-box .sub{color:var(--soft);margin-bottom:26px}
+.menu-box .lab{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--soft);margin:18px 0 10px}
+.decks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.decks{grid-template-columns:1fr}}
+.deckbtn{padding:18px 16px;border-radius:12px;text-align:left;font-size:15px;line-height:1.4;color:#241C18;border:0;font-weight:400}
+.deckbtn b{display:block;font-size:21px;margin-bottom:4px}
+.deckbtn:hover:not(:disabled){filter:brightness(1.08);background:revert-layer}
+.menu-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}
 .sheet{background:var(--panel2);border:1px solid var(--ink);border-radius:10px;padding:16px 18px;margin-bottom:10px;font-size:14px;line-height:1.55}
 .sheet h2{font-size:16px;margin-bottom:8px}
 .sheet ol{margin:0 0 10px 20px} .sheet li{margin-bottom:5px}
@@ -201,6 +216,8 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 </style>
 </head>
 <body>
+<div id="menu"></div>
+<div id="zoom"></div>
 <div class="wrap">
   <div>
     <div class="bar">
@@ -210,6 +227,7 @@ button.warn{border-color:var(--warn);color:var(--warn)}
       <button id="btnEnd" class="go">End turn</button>
       <label class="pick">Deck <select id="deckPick"></select></label>
       <button id="btnNew">New game</button>
+      <button id="btnMenu">Menu</button>
       <label class="pick" id="slimWrap"><input type="checkbox" id="slimRule" checked> Slim rules</label>
       <label class="pick" id="scrapRuleWrap"><input type="checkbox" id="scrapRule" checked> Scrap pile rule</label>
     </div>
@@ -1239,7 +1257,7 @@ function artInto(box,name,tint,label){
 
 /* Build a real card face: frame image, art behind its window, text on top.
    `onMove` gets (moveIndex) when a live move row is clicked; omit for hand cards. */
-function cardFace(name, {live=null, onMove=null, stack=null, extraTag=null}={}){
+function cardFace(name, {live=null, onMove=null, stack=null, extraTag=null, zoomed=false}={}){
   const def=C[name], isItem=!def;
   const cf=document.createElement('div');
   cf.className='cf'+(isItem?' item':'');
@@ -1275,7 +1293,7 @@ function cardFace(name, {live=null, onMove=null, stack=null, extraTag=null}={}){
   if(isItem){
     const r=document.createElement('div'); r.className='cf-recipe'; r.textContent='Costs '+ITEM[name].cost;
     tx.appendChild(r);
-    const e=document.createElement('div'); e.className='cf-mvt'; e.style.fontSize='5.4cqw';
+    const e=document.createElement('div'); e.className='cf-mvt'; e.style.fontSize='1.08em';
     e.textContent=ITEM[name].text; tx.appendChild(e);
   } else {
     const r=document.createElement('div'); r.className='cf-recipe';
@@ -1289,16 +1307,18 @@ function cardFace(name, {live=null, onMove=null, stack=null, extraTag=null}={}){
       g.textContent=growTxt; tx.appendChild(g); }
     def.m.forEach((mv,mi)=>{
       const usable = live && live(mv);
+      // faded only when the move really cannot be used — not just because it is not your turn
+      const why = stack ? deadReason(stack,mv) : '';
       const row=document.createElement('div');
-      row.className='cf-mv'+(usable?' live':(stack?' dead':''));
+      row.className='cf-mv'+(usable?' live':(why?' dead':''));
       const h=document.createElement('div'); h.className='cf-mvh';
       const shown = stack ? moveDmg(null,afterBurn(stack,mv),mv,null) : (mv.calc&&mv.calc.startsWith('perOwn') ? '×' : mv.d);
       h.innerHTML=`<span>${mv.n}</span><span class="cf-tag bg-${mv.t}">${mv.burn?'burn ':''}${mv.t}</span>`
                 + `<span class="cf-dmg">${shown}</span>`;
       row.appendChild(h);
       const t2=document.createElement('div'); t2.className='cf-mvt'; t2.textContent=mvText(mv);
-      if(stack && !usable){ const w=document.createElement('span'); w.className='mvwhy';
-        w.textContent=' — '+deadReason(stack,mv); t2.appendChild(w); }
+      if(why){ const w=document.createElement('span'); w.className='mvwhy';
+        w.textContent=' — '+why; t2.appendChild(w); }
       row.appendChild(t2);
       if(usable && onMove) row.onclick=ev=>{ ev.stopPropagation(); onMove(mi); };
       tx.appendChild(row);
@@ -1313,13 +1333,29 @@ function cardFace(name, {live=null, onMove=null, stack=null, extraTag=null}={}){
   else {
     const bits=[];
     if(def.seed) bits.push('seed');
-    if(def.grow) bits.push('grows from any '+def.grow+' seed');
     if(def.prize) bits.push('★ prize');
     ft.innerHTML=`<span>shrugs ${SHRUGS[def.t]}</span><span>${extraTag||bits.join(' · ')}</span>`;
   }
   cf.appendChild(ft);
+  if(!zoomed){ cf.onmouseenter=()=>showZoom(name,stack); cf.onmouseleave=hideZoom; }
   return cf;
 }
+/* Shrink a card's text block until nothing is cut off. Sizes inside are in em, so one
+   number scales the lot. Runs after every render, once the cards are on the page. */
+function fitCards(root){
+  const all=(root||document).querySelectorAll ? (root||document).querySelectorAll('.cf-text') : [];
+  all.forEach(tx=>{
+    let k=1; tx.style.fontSize='';
+    while(tx.scrollHeight>tx.clientHeight+1 && k>0.5){ k-=0.04; tx.style.fontSize=(5*k).toFixed(2)+'cqw'; }
+  });
+}
+/* Hover a card to read it large, bottom right. */
+function showZoom(name,stack){
+  const z=document.getElementById('zoom');
+  z.replaceChildren(cardFace(name,{stack:stack||null,zoomed:true}));
+  z.style.display='block'; fitCards(z);
+}
+function hideZoom(){ const z=document.getElementById('zoom'); if(z&&z.style) z.style.display='none'; }
 
 /* A finished material card, used whole in hand. */
 function materialFace(type){
@@ -1579,6 +1615,7 @@ function render(){
   bn.replaceChildren();
   if(over){ bn.className='banner'; bn.textContent = (G.winner===G.you?'You win.':'Bot wins.'); }
   else bn.className='';
+  hideZoom(); fitCards();
 }
 
 /* ============================ HUMAN INPUT ============================ */
@@ -1860,7 +1897,7 @@ function showTutorial(){
     'Stuck? Once a turn you may scrap a character from your hand into a material of any type. If your whole shelf gets broken, your next turn is a rebuild turn: 4 moves, and what you build can act straight away.',
   ].forEach(t=>ol.appendChild(el('li',t)));
   sh.appendChild(ol);
-  const go=el('button','Start playing','go'); go.onclick=()=>{ box.replaceChildren(); try{ localStorage.setItem('scrapkin-seen','1'); }catch(e){} };
+  const go=el('button',STARTED?'Back to the game':'Close','go'); go.onclick=()=>{ box.replaceChildren(); if(!STARTED) showMenu(); try{ localStorage.setItem('scrapkin-seen','1'); }catch(e){} };
   sh.appendChild(go);
   box.appendChild(sh);
 }
@@ -1896,12 +1933,33 @@ function showFeedback(){
   sh.appendChild(row); sh.appendChild(out);
   box.appendChild(sh);
 }
-if(TESTER){
-  const how=el('button','How to play'); how.onclick=showTutorial;
-  document.getElementById('btnNew').parentNode && document.getElementById('btnNew').parentNode.appendChild(how);
-  let seen=false; try{ seen=!!localStorage.getItem('scrapkin-seen'); }catch(e){}
-  if(!seen) showTutorial();
+/* ---- main menu: pick a deck, read the rules, leave feedback ---- */
+let STARTED=false;
+function hideMenu(){ document.getElementById('menu').className=''; }
+function showMenu(){
+  const m=document.getElementById('menu'); m.replaceChildren(); m.className='on';
+  const box=el('div',null,'menu-box');
+  box.appendChild(el('h1','Scrapkin'));
+  box.appendChild(el('div','a toy-box card game for two — playtest','sub'));
+  box.appendChild(el('div','Pick a deck to play against the computer','lab'));
+  const decks=el('div',null,'decks');
+  Object.keys(DECKS).forEach(k=>{
+    const b=el('button',null,'deckbtn bg-'+k);
+    b.appendChild(el('b',DECKS[k].name)); b.appendChild(document.createTextNode(DECKS[k].blurb||''));
+    b.onclick=()=>{ YOUR_DECK=k; document.getElementById('deckPick').value=k; STARTED=true; hideMenu(); newGame();
+      let seen=false; try{ seen=!!localStorage.getItem('scrapkin-seen'); }catch(e){}
+      if(!seen) showTutorial(); };
+    decks.appendChild(b);
+  });
+  box.appendChild(decks);
+  const row=el('div',null,'menu-row');
+  const how=el('button','How to play'); how.onclick=()=>{ hideMenu(); showTutorial(); }; row.appendChild(how);
+  if(FEEDBACK_URL){ const a=el('a'); a.href=FEEDBACK_URL; a.target='_blank'; a.rel='noopener'; a.appendChild(el('button','Give feedback')); row.appendChild(a); }
+  if(STARTED){ const back=el('button','Back to the game'); back.onclick=hideMenu; row.appendChild(back); }
+  box.appendChild(row);
+  m.appendChild(box);
 }
+document.getElementById('btnMenu').onclick=showMenu;
 
 /* Which picture each card is currently using. */
 (function listArt(){
@@ -1921,6 +1979,7 @@ if(TESTER){
 })();
 
 newGame();
+if(typeof window!=='undefined' && document.querySelectorAll) showMenu();
 </script>
 </body>
 </html>
