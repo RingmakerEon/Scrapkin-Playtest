@@ -189,9 +189,10 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 .prompt{background:#463629;border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:9px 12px;font-size:15px;margin-bottom:8px}
 #zoom{position:fixed;right:18px;bottom:18px;width:360px;z-index:50;pointer-events:none;display:none;
   filter:drop-shadow(0 10px 24px rgba(0,0,0,.7))}
-#menu{position:fixed;inset:0;z-index:60;background:rgba(30,23,19,.97);display:none;
+#pass{background:#1E1713 !important}
+#menu,#pass{position:fixed;inset:0;z-index:60;background:rgba(30,23,19,.97);display:none;
   align-items:center;justify-content:center;padding:18px;overflow:auto}
-#menu.on{display:flex}
+#menu.on,#pass.on{display:flex}
 .menu-box{max-width:660px;width:100%;text-align:center}
 .menu-box h1{font-size:44px;letter-spacing:-.02em;margin-bottom:2px}
 .menu-box .sub{color:var(--soft);margin-bottom:26px}
@@ -217,6 +218,7 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 </head>
 <body>
 <div id="menu"></div>
+<div id="pass"></div>
 <div id="zoom"></div>
 <div class="wrap">
   <div>
@@ -261,8 +263,8 @@ button.warn{border-color:var(--warn);color:var(--warn)}
     <div class="stat"><span>Turn</span><b id="sTurn">1</b></div>
     <div class="stat"><span>Moves left</span><b id="sMoves">3</b></div>
     <div class="stat"><span>Scrap used</span><b id="sScrap">no</b></div>
-    <div class="stat"><span>Your prizes left</span><b id="sPrizeYou">2</b></div>
-    <div class="stat"><span>Bot prizes left</span><b id="sPrizeBot">2</b></div>
+    <div class="stat"><span id="lPrizeYou">Your prizes left</span><b id="sPrizeYou">2</b></div>
+    <div class="stat"><span id="lPrizeBot">Bot prizes left</span><b id="sPrizeBot">2</b></div>
     <hr style="border:0;border-top:1px solid var(--line)">
     <div class="note">First build on turn: <b id="sFirstBuild">—</b></div>
     <div class="note">Shelf full on turn: <b id="sShelfFull">—</b></div>
@@ -451,25 +453,34 @@ function pickBotDeck(mine){
   const opts = Object.keys(DECKS).filter(k=>k!==mine);
   return opts[rnd(opts.length)];
 }
+/* Two players on one screen. The trick that keeps the rest of the code unchanged: whoever is
+   at the controls is always G.you. When a turn ends the two players swap places, a cover
+   hides the table while the device changes hands, and the next turn starts. The online
+   version will reuse the same swap to show each player their own side.              */
+let HOTSEAT = false;
 function newGame(){
   const mine = YOUR_DECK, theirs = pickBotDeck(mine);
-  G={you:newPlayer(mine,false), bot:newPlayer(theirs,true), turn:1, actor:'you', moves:3, log:[]};
-  document.getElementById('youLabel').textContent = DECKS[mine].name + ' (you)';
-  document.getElementById('botLabel').textContent = DECKS[theirs].name + ' (bot)';
+  G={you:newPlayer(mine,false), bot:newPlayer(theirs,!HOTSEAT), turn:1, actor:'you', moves:3, log:[]};
+  G.you.seat=1; G.bot.seat=2;
+  G.you.label=HOTSEAT?'Player 1':'You'; G.bot.label=HOTSEAT?'Player 2':'Bot';
   // opening hands
   for(const p of [G.you,G.bot]){
     for(let i=0;i<(SLIM?4:5);i++) drawMain(p,true);
     for(let i=0;i<(SLIM?4:7);i++) drawMat(p,true);   // 4 left 71% of openings unable to build
   }
   sel=null;pend=null;over=false;
-  say('sys',`Game start. You: ${DECKS[mine].name} (${mine}). Bot: ${DECKS[theirs].name} (${theirs}) — a neutral matchup, neither shrugs the other off.`);
-  say('sys','You go first — you skip your material draw this turn.');
+  say('sys',`Game start. ${G.you.label}: ${DECKS[mine].name} (${mine}). ${G.bot.label}: ${DECKS[theirs].name} (${theirs}).`);
+  say('sys',`${HOTSEAT?'Player 1 goes':'You go'} first, and skips the material draw this turn.`);
   // Turn one for the first player: they still take their main-deck draw,
   // only the material draw is skipped.
   drawMain(G.you);
   render();
+  if(HOTSEAT) showPass(true);
 }
-function say(who,txt){G.log.unshift({who,txt}); }
+function say(who,txt){
+  if(HOTSEAT && who==='you'){ who = G.you.seat===1?'you':'bot'; txt = G.you.label+': '+txt; }
+  G.log.unshift({who,txt});
+}
 
 function drawMain(p,silent){
   if(!p.deck.length){ if(!silent) lose(p,'could not draw from an empty main deck'); return false; }
@@ -672,7 +683,7 @@ function startTurn(){
   // by only ever taking materials, and a whole win condition stops existing.
   if(!p.deck.length){ lose(p,'could not draw from an empty main deck'); render(); return; }
   const drew=drawMain(p);
-  if(!p.isBot) say('you',`You draw ${drew}.`); else say('bot','Bot draws a card.');
+  if(!p.isBot) say('you',HOTSEAT?'You draw a card.':`You draw ${drew}.`); else say('bot','Bot draws a card.');
   G.moves=3;
   p.rush = SLIM && REBUILD_RULE && !!p.wipedByFoe && p.shelf.every(s=>!s);
   p.wipedByFoe=false;
@@ -684,7 +695,7 @@ function startTurn(){
   // either way), which is the tell that it was never doing the job it was written for.
   if(SLIM){                       // one card, two materials, nothing to decide
     const got=[drawMat(p),drawMat(p)].filter(Boolean);
-    if(!p.isBot) say('you',got.length?`You draw ${got.join(' and ')} material${got.length>1?'s':''}.`:'Your material deck is empty.');
+    if(!p.isBot) say('you',!got.length?'Your material deck is empty.':HOTSEAT?`You draw ${got.length} material${got.length>1?'s':''}.`:`You draw ${got.join(' and ')} material${got.length>1?'s':''}.`);
     afterDraw(p); return;
   }
   const free = 2;
@@ -723,6 +734,19 @@ function afterDraw(p){
   if(p.isBot) setTimeout(botTurn,420);
   render();
 }
+/* The cover between turns. Nothing behind it is visible, so hands stay secret. */
+function showPass(first){
+  pend={stage:'pass'}; render();
+  const c=document.getElementById('pass'); c.replaceChildren(); c.className='on';
+  const box=el('div',null,'menu-box');
+  box.appendChild(el('h1',G.you.label));
+  box.appendChild(el('div',G.you.name+' — turn '+G.turn,'sub'));
+  box.appendChild(el('div',first?'Player 2, look away now.':'Pass the device to '+G.you.label+'. No peeking, '+G.bot.label+'.','lab'));
+  const row=el('div',null,'menu-row');
+  const go=el('button','I am '+G.you.label+' — show my hand','go');
+  go.onclick=()=>{ c.className=''; c.replaceChildren(); pend=null; if(first) render(); else startTurn(); };
+  row.appendChild(go); box.appendChild(row); c.appendChild(box);
+}
 function endTurn(){
   if(over) return;
   sel=null;pend=null;
@@ -730,6 +754,11 @@ function endTurn(){
   // Marks only last the turn they were made.
   cur().shelf.forEach(ch=>{ if(ch) ch.smothered=false; });
   opp(cur()).shelf.forEach(ch=>{ if(ch) ch.marked=false; });
+  if(HOTSEAT){
+    [G.you,G.bot]=[G.bot,G.you];                 // the next player takes the controls
+    if(G.you.seat===1) G.turn++;
+    G.moves=0; showPass(false); return;          // their turn starts when they uncover the table
+  }
   if(G.actor==='you'){ G.actor='bot'; } else { G.actor='you'; G.turn++; }
   startTurn();
 }
@@ -1440,6 +1469,8 @@ function render(){
   const you=G.you, bot=G.bot;
   document.getElementById('botShelf').replaceChildren(...[0,1,2].map(i=>chEl(bot,i,false)));
   document.getElementById('youShelf').replaceChildren(...[0,1,2].map(i=>chEl(you,i,true)));
+  document.getElementById('youLabel').textContent = HOTSEAT ? you.label+' — '+you.name+' (playing now)' : you.name+' (you)';
+  document.getElementById('botLabel').textContent = HOTSEAT ? bot.label+' — '+bot.name : bot.name+' (bot)';
   document.getElementById('youCounts').textContent=
     `main deck ${you.deck.length} · material deck ${you.matDeck.length} · prizes ${you.prize.length} · discard ${you.discard.length}` + scrapNote(you);
   document.getElementById('botCounts').textContent=
@@ -1488,13 +1519,15 @@ function render(){
   const meltBtn=document.getElementById('btnMelt');
   meltBtn.disabled = over||G.actor!=='you'||!!pend||you.meltUsed||handMats(you).length<2;
   meltBtn.className = (pend&&pend.stage==='melt')?'go':'';
+  document.getElementById('lPrizeYou').textContent = HOTSEAT ? you.label+' prizes left' : 'Your prizes left';
+  document.getElementById('lPrizeBot').textContent = HOTSEAT ? bot.label+' prizes left' : 'Bot prizes left';
   document.getElementById('sPrizeYou').textContent=you.prize.length;
   document.getElementById('sPrizeBot').textContent=bot.prize.length;
   document.getElementById('sFirstBuild').textContent=you.firstBuild??'—';
   document.getElementById('sShelfFull').textContent=you.shelfFull??'—';
   document.getElementById('sGrows').textContent=you.grows;
   document.getElementById('sItems').textContent=you.items;
-  document.getElementById('turnInfo').textContent = over?'game over':(G.actor==='you'?`your turn · ${G.moves} moves${you.rush?' · rebuild turn':''}`:'bot thinking…');
+  document.getElementById('turnInfo').textContent = over?'game over':(G.actor==='you'?`${HOTSEAT?you.label+"'s turn":'your turn'} · ${G.moves} moves${you.rush?' · rebuild turn':''}`:'bot thinking…');
   if(TESTER){ ['slimWrap','scrapRuleWrap','artWrap','v2Wrap','immWrap'].forEach(id=>{ document.getElementById(id).style.display='none'; });
     if(over && !G.asked){ G.asked=true; showFeedback(); } }
   document.getElementById('btnEnd').disabled = over||G.actor!=='you'||(pend&&pend.stage==='draw');
@@ -1613,7 +1646,7 @@ function render(){
 
   const bn=document.getElementById('banner');
   bn.replaceChildren();
-  if(over){ bn.className='banner'; bn.textContent = (G.winner===G.you?'You win.':'Bot wins.'); }
+  if(over){ bn.className='banner'; bn.textContent = HOTSEAT ? G.winner.label+' wins.' : (G.winner===G.you?'You win.':'Bot wins.'); }
   else bn.className='';
   hideZoom(); fitCards();
 }
@@ -1904,7 +1937,7 @@ function showTutorial(){
 function showFeedback(){
   const box=document.getElementById('overlay'); box.replaceChildren();
   const sh=el('div',null,'sheet'), ans={fun:null,again:null};
-  sh.appendChild(el('h2',(G.winner===G.you?'You won.':'The bot won.')+' Three quick questions — they decide what changes next.'));
+  sh.appendChild(el('h2',(HOTSEAT?G.winner.label+' won.':G.winner===G.you?'You won.':'The bot won.')+' Three quick questions — they decide what changes next.'));
   const pick=(key,label,opts)=>{
     sh.appendChild(el('div',label,'q'));
     const row=el('div',null,'row');
@@ -1941,14 +1974,19 @@ function showMenu(){
   const box=el('div',null,'menu-box');
   box.appendChild(el('h1','Scrapkin'));
   box.appendChild(el('div','a toy-box card game for two — playtest','sub'));
-  box.appendChild(el('div','Pick a deck to play against the computer','lab'));
+  box.appendChild(el('div','Play against','lab'));
+  const modes=el('div',null,'menu-row'); modes.style.marginTop='0';
+  [['The computer',false],['A friend, on this screen',true]].forEach(([t,hs])=>{
+    const b=el('button',t,HOTSEAT===hs?'go':''); b.onclick=()=>{ HOTSEAT=hs; showMenu(); }; modes.appendChild(b); });
+  box.appendChild(modes);
+  box.appendChild(el('div',HOTSEAT?'Player 1, pick your deck — Player 2 plays the other':'Pick your deck','lab'));
   const decks=el('div',null,'decks');
   Object.keys(DECKS).forEach(k=>{
     const b=el('button',null,'deckbtn bg-'+k);
     b.appendChild(el('b',DECKS[k].name)); b.appendChild(document.createTextNode(DECKS[k].blurb||''));
     b.onclick=()=>{ YOUR_DECK=k; document.getElementById('deckPick').value=k; STARTED=true; hideMenu(); newGame();
       let seen=false; try{ seen=!!localStorage.getItem('scrapkin-seen'); }catch(e){}
-      if(!seen) showTutorial(); };
+      if(!seen && !HOTSEAT) showTutorial(); };
     decks.appendChild(b);
   });
   box.appendChild(decks);
