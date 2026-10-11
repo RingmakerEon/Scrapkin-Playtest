@@ -221,6 +221,51 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 
 .bg-cloth{background:var(--cloth)} .bg-wood{background:var(--wood)} .bg-clay{background:var(--clay)}
 .bg-tin{background:var(--tin)} .bg-glass{background:var(--glass)} .bg-plastic{background:var(--plastic)}
+/* ---------- phones ----------
+   One column. Each shelf and the hand become a row you swipe sideways, so a card stays
+   big enough to read and its moves big enough to tap. The top bar sticks, so End turn
+   is always in reach, and so does the yellow prompt that says what to tap next.
+   There is no hover on a touch screen, so every card gets a small button that opens
+   it full size; tap anywhere to close it.                                            */
+.cf-zoombtn{display:none;position:absolute;right:5%;top:15%;z-index:6;width:30px;height:30px;border-radius:50%;
+  background:rgba(30,23,19,.72);color:#fff;font-size:17px;line-height:30px;text-align:center;cursor:pointer;
+  box-shadow:0 2px 5px rgba(0,0,0,.5)}
+#zoom.modal{display:flex !important;inset:0;width:auto;right:0;bottom:0;align-items:center;justify-content:center;
+  background:rgba(20,15,12,.9);pointer-events:auto;z-index:70;filter:none;padding:14px}
+#zoom.modal>.cf{width:min(92vw,400px)}
+@media (hover:none), (max-width:760px){ .cf-zoombtn{display:block} }
+@media (max-width:760px){
+  body{padding:6px}
+  .wrap{display:block}
+  .bar{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0;margin-bottom:6px;gap:6px}
+  .bar h1{display:none}
+  .bar .sp{display:none}
+  .bar button{padding:7px 10px;font-size:14px}
+  #turnInfo{flex:1 1 auto;font-size:12px}
+  .pick{display:none !important}          /* the menu picks the deck on a phone */
+  #prompt.prompt{position:fixed;left:8px;right:8px;bottom:8px;z-index:30;font-size:14px;margin:0;
+    box-shadow:0 6px 18px rgba(0,0,0,.7)}
+  #prompt.prompt button{margin-top:6px}
+  body{padding-bottom:84px}
+  .zone{padding:8px;margin-bottom:8px}
+  .zhead{flex-wrap:wrap;gap:4px 10px;font-size:11px}
+  .zhead .sp{display:none}
+  .zhead button{font-size:13px;padding:6px 9px}
+  .shelf{display:flex;justify-content:flex-start;overflow-x:auto;gap:8px;padding:2px 2px 10px;
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+  .shelf>.slot{flex:0 0 66vw;max-width:300px;scroll-snap-align:center}
+  .shelf>.ch.empty{flex:0 0 30vw;min-height:150px;scroll-snap-align:center}
+  .ch:not(.empty):hover{transform:none}
+  .hand{flex-wrap:nowrap;overflow-x:auto;padding:2px 2px 10px;-webkit-overflow-scrolling:touch}
+  .hc{flex:0 0 46vw;width:46vw;max-width:210px} .hc:hover{transform:none}
+  .hc.matcard{flex:0 0 22vw;width:22vw;max-width:100px}
+  .understrip{font-size:12px}
+  .side{margin-top:8px}
+  .log{height:200px}
+  .sheet{padding:13px 13px;font-size:14px}
+  .menu-box h1{font-size:36px}
+  .menu-row{gap:8px}
+}
 </style>
 </head>
 <body>
@@ -1392,7 +1437,12 @@ function cardFace(name, {live=null, onMove=null, stack=null, extraTag=null, zoom
     ft.innerHTML=`<span>shrugs ${SHRUGS[def.t]}</span><span>${extraTag||bits.join(' · ')}</span>`;
   }
   cf.appendChild(ft);
-  if(!zoomed){ cf.onmouseenter=()=>showZoom(name,stack); cf.onmouseleave=hideZoom; }
+  if(!zoomed){
+    cf.onmouseenter=()=>{ if(canHover()) showZoom(name,stack); }; cf.onmouseleave=()=>{ if(canHover()) hideZoom(); };
+    const zb=document.createElement('div'); zb.className='cf-zoombtn'; zb.textContent='⤢'; zb.title='Show this card large';
+    zb.onclick=ev=>{ ev.stopPropagation(); showZoom(name,stack,true); };
+    cf.appendChild(zb);
+  }
   return cf;
 }
 /* Shrink a card's text block until nothing is cut off. Sizes inside are in em, so one
@@ -1405,12 +1455,14 @@ function fitCards(root){
   });
 }
 /* Hover a card to read it large, bottom right. */
-function showZoom(name,stack){
+function canHover(){ return typeof window==='undefined' || !window.matchMedia || window.matchMedia('(hover:hover)').matches; }
+function showZoom(name,stack,full){
   const z=document.getElementById('zoom');
   z.replaceChildren(cardFace(name,{stack:stack||null,zoomed:true}));
+  z.className=full?'modal':''; z.onclick=full?hideZoom:null;
   z.style.display='block'; fitCards(z);
 }
-function hideZoom(){ const z=document.getElementById('zoom'); if(z&&z.style) z.style.display='none'; }
+function hideZoom(){ const z=document.getElementById('zoom'); if(z&&z.style){ z.style.display='none'; z.className=''; } }
 
 /* A finished material card, used whole in hand. */
 function materialFace(type){
@@ -1498,7 +1550,8 @@ function chEl(p,slot,isYou){
     strip.style.margin='-5px '+(12+k*8)+'px 0';
     const nm=document.createElement('b'); nm.textContent=m.under+(u.seed?' [seed]':''); strip.appendChild(nm);
     if(u.underTxt){ const t=document.createElement('span'); t.textContent=' Underneath: '+u.underTxt; strip.appendChild(t); }
-    strip.onmouseenter=()=>showZoom(m.under,null); strip.onmouseleave=hideZoom;
+    strip.onmouseenter=()=>{ if(canHover()) showZoom(m.under,null); }; strip.onmouseleave=()=>{ if(canHover()) hideZoom(); };
+    strip.onclick=()=>{ if(!canHover()) showZoom(m.under,null,true); };
     wrap.appendChild(strip);
   });
   wrap.appendChild(st);
