@@ -1955,9 +1955,28 @@ function showMenu(){
   const row=el('div',null,'menu-row');
   const how=el('button','How to play'); how.onclick=()=>{ hideMenu(); showTutorial(); }; row.appendChild(how);
   if(FEEDBACK_URL){ const a=el('a'); a.href=FEEDBACK_URL; a.target='_blank'; a.rel='noopener'; a.appendChild(el('button','Give feedback')); row.appendChild(a); }
+  const cr=el('button','Credits'); cr.onclick=showCredits; row.appendChild(cr);
   if(STARTED){ const back=el('button','Back to the game'); back.onclick=hideMenu; row.appendChild(back); }
   box.appendChild(row);
   m.appendChild(box);
+}
+/* Who made what. Edit the lines in CREDITS to change the wording. */
+const CREDITS = [
+  ['Made by one person', 'Scrapkin is a one-person project.'],
+  ['Art and characters', 'Every picture and every character is drawn by hand. Nothing here is AI-generated art.'],
+  ['The game', 'The idea, the world and the direction of the game are the creator\'s own.'],
+  ['This app', 'The digital playtest you are using was programmed with the help of AI. The exact rules and card numbers in this test version were worked out with AI help too — they are what this playtest is here to check.'],
+];
+function showCredits(){
+  const m=document.getElementById('menu'); m.replaceChildren(); m.className='on';
+  const box=el('div',null,'menu-box');
+  box.appendChild(el('h1','Credits'));
+  const sh=el('div',null,'sheet'); sh.style.textAlign='left'; sh.style.marginTop='18px';
+  CREDITS.forEach(([h,t])=>{ sh.appendChild(el('div',h,'q')); sh.appendChild(el('div',t)); });
+  box.appendChild(sh);
+  const row=el('div',null,'menu-row');
+  const back=el('button','Back','go'); back.onclick=showMenu; row.appendChild(back);
+  box.appendChild(row); m.appendChild(box);
 }
 document.getElementById('btnMenu').onclick=showMenu;
 
