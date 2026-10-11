@@ -421,6 +421,10 @@ const BUILD_TESTER = true;
 const TESTER = BUILD_TESTER || (typeof location!=='undefined' && /[?&]tester\b/.test(location.search||''));
 /* Where a tester's answers should go. Leave empty and they get a Copy button instead. */
 const FEEDBACK_URL = '';
+/* The lobby server (v2/server). Empty = no online play, and the menu hides the option.
+   For testing against a copy on this computer, add ?net=ws://localhost:8787 to the address. */
+const NET_DEFAULT = 'wss://scrapkin-lobby.wa-wo.workers.dev';
+const NET_URL = (typeof location!=='undefined' && (/[?&]net=([^&]+)/.exec(location.search||'')||[])[1]) ? decodeURIComponent(/[?&]net=([^&]+)/.exec(location.search)[1]) : NET_DEFAULT;
 function toScrap(p,type){ if(SCRAP_RULE&&!SLIM) p.scrap.push(type); }
 /* Pay a burn move's cost out of the character's own stack. Returns what was burned. */
 function payBurn(p,ch,mv){
@@ -458,11 +462,16 @@ function pickBotDeck(mine){
    hides the table while the device changes hands, and the next turn starts. The online
    version will reuse the same swap to show each player their own side.              */
 let HOTSEAT = false;
+/* Playing someone on another device. Each player's own browser shows them as G.you. The
+   player whose turn it is runs the game and sends the whole table to the other after every
+   change; ending the turn hands the table over. NAMES holds what to call the two players. */
+let ONLINE = false, NAMES = {me:'You', opp:'Opponent'};
+const SHARED = () => HOTSEAT || ONLINE;      // the log is read by both players
 function newGame(){
   const mine = YOUR_DECK, theirs = pickBotDeck(mine);
-  G={you:newPlayer(mine,false), bot:newPlayer(theirs,!HOTSEAT), turn:1, actor:'you', moves:3, log:[]};
+  G={you:newPlayer(mine,false), bot:newPlayer(theirs,!SHARED()), turn:1, actor:'you', moves:3, log:[]};
   G.you.seat=1; G.bot.seat=2;
-  G.you.label=HOTSEAT?'Player 1':'You'; G.bot.label=HOTSEAT?'Player 2':'Bot';
+  G.you.label=ONLINE?NAMES.me:HOTSEAT?'Player 1':'You'; G.bot.label=ONLINE?NAMES.opp:HOTSEAT?'Player 2':'Bot';
   // opening hands
   for(const p of [G.you,G.bot]){
     for(let i=0;i<(SLIM?4:5);i++) drawMain(p,true);
@@ -470,7 +479,7 @@ function newGame(){
   }
   sel=null;pend=null;over=false;
   say('sys',`Game start. ${G.you.label}: ${DECKS[mine].name} (${mine}). ${G.bot.label}: ${DECKS[theirs].name} (${theirs}).`);
-  say('sys',`${HOTSEAT?'Player 1 goes':'You go'} first, and skips the material draw this turn.`);
+  say('sys',`${SHARED()?G.you.label+' goes':'You go'} first, and skips the material draw this turn.`);
   // Turn one for the first player: they still take their main-deck draw,
   // only the material draw is skipped.
   drawMain(G.you);
@@ -478,7 +487,7 @@ function newGame(){
   if(HOTSEAT) showPass(true);
 }
 function say(who,txt){
-  if(HOTSEAT && who==='you'){ who = G.you.seat===1?'you':'bot'; txt = G.you.label+': '+txt; }
+  if(SHARED() && who==='you'){ who = G.you.seat===1?'you':'bot'; txt = G.you.label+': '+txt; }
   G.log.unshift({who,txt});
 }
 
@@ -683,7 +692,7 @@ function startTurn(){
   // by only ever taking materials, and a whole win condition stops existing.
   if(!p.deck.length){ lose(p,'could not draw from an empty main deck'); render(); return; }
   const drew=drawMain(p);
-  if(!p.isBot) say('you',HOTSEAT?'You draw a card.':`You draw ${drew}.`); else say('bot','Bot draws a card.');
+  if(!p.isBot) say('you',SHARED()?'You draw a card.':`You draw ${drew}.`); else say('bot','Bot draws a card.');
   G.moves=3;
   p.rush = SLIM && REBUILD_RULE && !!p.wipedByFoe && p.shelf.every(s=>!s);
   p.wipedByFoe=false;
@@ -695,7 +704,7 @@ function startTurn(){
   // either way), which is the tell that it was never doing the job it was written for.
   if(SLIM){                       // one card, two materials, nothing to decide
     const got=[drawMat(p),drawMat(p)].filter(Boolean);
-    if(!p.isBot) say('you',!got.length?'Your material deck is empty.':HOTSEAT?`You draw ${got.length} material${got.length>1?'s':''}.`:`You draw ${got.join(' and ')} material${got.length>1?'s':''}.`);
+    if(!p.isBot) say('you',!got.length?'Your material deck is empty.':SHARED()?`You draw ${got.length} material${got.length>1?'s':''}.`:`You draw ${got.join(' and ')} material${got.length>1?'s':''}.`);
     afterDraw(p); return;
   }
   const free = 2;
@@ -754,6 +763,12 @@ function endTurn(){
   // Marks only last the turn they were made.
   cur().shelf.forEach(ch=>{ if(ch) ch.smothered=false; });
   opp(cur()).shelf.forEach(ch=>{ if(ch) ch.marked=false; });
+  if(ONLINE){                                   // hand the table to the other player's browser
+    if(G.you.seat===2) G.turn++;
+    G.actor='bot'; G.moves=0; render();
+    netSend({t:'msg',data:{k:'end',s:snapshot()}});
+    return;
+  }
   if(HOTSEAT){
     [G.you,G.bot]=[G.bot,G.you];                 // the next player takes the controls
     if(G.you.seat===1) G.turn++;
@@ -1469,8 +1484,8 @@ function render(){
   const you=G.you, bot=G.bot;
   document.getElementById('botShelf').replaceChildren(...[0,1,2].map(i=>chEl(bot,i,false)));
   document.getElementById('youShelf').replaceChildren(...[0,1,2].map(i=>chEl(you,i,true)));
-  document.getElementById('youLabel').textContent = HOTSEAT ? you.label+' — '+you.name+' (playing now)' : you.name+' (you)';
-  document.getElementById('botLabel').textContent = HOTSEAT ? bot.label+' — '+bot.name : bot.name+' (bot)';
+  document.getElementById('youLabel').textContent = ONLINE ? you.label+' — '+you.name+' (you)' : HOTSEAT ? you.label+' — '+you.name+' (playing now)' : you.name+' (you)';
+  document.getElementById('botLabel').textContent = SHARED() ? bot.label+' — '+bot.name : bot.name+' (bot)';
   document.getElementById('youCounts').textContent=
     `main deck ${you.deck.length} · material deck ${you.matDeck.length} · prizes ${you.prize.length} · discard ${you.discard.length}` + scrapNote(you);
   document.getElementById('botCounts').textContent=
@@ -1520,14 +1535,14 @@ function render(){
   meltBtn.disabled = over||G.actor!=='you'||!!pend||you.meltUsed||handMats(you).length<2;
   meltBtn.className = (pend&&pend.stage==='melt')?'go':'';
   document.getElementById('lPrizeYou').textContent = HOTSEAT ? you.label+' prizes left' : 'Your prizes left';
-  document.getElementById('lPrizeBot').textContent = HOTSEAT ? bot.label+' prizes left' : 'Bot prizes left';
+  document.getElementById('lPrizeBot').textContent = SHARED() ? bot.label+' prizes left' : 'Bot prizes left';
   document.getElementById('sPrizeYou').textContent=you.prize.length;
   document.getElementById('sPrizeBot').textContent=bot.prize.length;
   document.getElementById('sFirstBuild').textContent=you.firstBuild??'—';
   document.getElementById('sShelfFull').textContent=you.shelfFull??'—';
   document.getElementById('sGrows').textContent=you.grows;
   document.getElementById('sItems').textContent=you.items;
-  document.getElementById('turnInfo').textContent = over?'game over':(G.actor==='you'?`${HOTSEAT?you.label+"'s turn":'your turn'} · ${G.moves} moves${you.rush?' · rebuild turn':''}`:'bot thinking…');
+  document.getElementById('turnInfo').textContent = over?'game over':(G.actor==='you'?`${HOTSEAT?you.label+"'s turn":'your turn'} · ${G.moves} moves${you.rush?' · rebuild turn':''}`:(ONLINE?bot.label+"'s turn":'bot thinking…'));
   if(TESTER){ ['slimWrap','scrapRuleWrap','artWrap','v2Wrap','immWrap'].forEach(id=>{ document.getElementById(id).style.display='none'; });
     if(over && !G.asked){ G.asked=true; showFeedback(); } }
   document.getElementById('btnEnd').disabled = over||G.actor!=='you'||(pend&&pend.stage==='draw');
@@ -1646,9 +1661,10 @@ function render(){
 
   const bn=document.getElementById('banner');
   bn.replaceChildren();
-  if(over){ bn.className='banner'; bn.textContent = HOTSEAT ? G.winner.label+' wins.' : (G.winner===G.you?'You win.':'Bot wins.'); }
+  if(over){ bn.className='banner'; bn.textContent = (ONLINE&&G.ended ? G.ended+' ' : '') + (HOTSEAT ? G.winner.label+' wins.' : G.winner===G.you?'You win.' : ONLINE ? G.winner.label+' wins.' : 'Bot wins.'); }
   else bn.className='';
   hideZoom(); fitCards();
+  if(ONLINE && G.actor==='you') netSync();      // the other player watches every change
 }
 
 /* ============================ HUMAN INPUT ============================ */
@@ -1910,9 +1926,9 @@ document.getElementById('btnEnd').onclick=()=>{ if(!over&&G.actor==='you'){ sel=
   sel.innerHTML=Object.keys(DECKS).map(k=>
     `<option value="${k}">${DECKS[k].name} — ${k}</option>`).join('');
   sel.value=YOUR_DECK;
-  sel.onchange=()=>{ YOUR_DECK=sel.value; newGame(); };
+  sel.onchange=()=>{ if(ONLINE){ sel.value=G.you.key; return; } YOUR_DECK=sel.value; newGame(); };
 })();
-document.getElementById('btnNew').onclick=newGame;
+document.getElementById('btnNew').onclick=()=>{ if(ONLINE) showMenu(); else newGame(); };
 
 /* ---- tester mode: a first-visit tutorial, and three questions when a game ends ---- */
 function el(tag,text,cls){ const e=document.createElement(tag); if(text) e.textContent=text; if(cls) e.className=cls; return e; }
@@ -1937,7 +1953,7 @@ function showTutorial(){
 function showFeedback(){
   const box=document.getElementById('overlay'); box.replaceChildren();
   const sh=el('div',null,'sheet'), ans={fun:null,again:null};
-  sh.appendChild(el('h2',(HOTSEAT?G.winner.label+' won.':G.winner===G.you?'You won.':'The bot won.')+' Three quick questions — they decide what changes next.'));
+  sh.appendChild(el('h2',(HOTSEAT?G.winner.label+' won.':G.winner===G.you?'You won.':ONLINE?G.winner.label+' won.':'The bot won.')+' Three quick questions — they decide what changes next.'));
   const pick=(key,label,opts)=>{
     sh.appendChild(el('div',label,'q'));
     const row=el('div',null,'row');
@@ -1978,13 +1994,14 @@ function showMenu(){
   const modes=el('div',null,'menu-row'); modes.style.marginTop='0';
   [['Against the computer',false],['Against friend (same device)',true]].forEach(([t,hs])=>{
     const b=el('button',t,HOTSEAT===hs?'go':''); b.onclick=()=>{ HOTSEAT=hs; showMenu(); }; modes.appendChild(b); });
+  if(NET_URL){ const b=el('button','Online'); b.onclick=showLobby; modes.appendChild(b); }
   box.appendChild(modes);
   box.appendChild(el('div',HOTSEAT?'Player 1, pick your deck — Player 2 plays the other':'Pick your deck','lab'));
   const decks=el('div',null,'decks');
   Object.keys(DECKS).forEach(k=>{
     const b=el('button',null,'deckbtn bg-'+k);
     b.appendChild(el('b',DECKS[k].name)); b.appendChild(document.createTextNode(DECKS[k].blurb||''));
-    b.onclick=()=>{ YOUR_DECK=k; document.getElementById('deckPick').value=k; STARTED=true; hideMenu(); newGame();
+    b.onclick=()=>{ netLeave(); YOUR_DECK=k; document.getElementById('deckPick').value=k; STARTED=true; hideMenu(); newGame();
       let seen=false; try{ seen=!!localStorage.getItem('scrapkin-seen'); }catch(e){}
       if(!seen && !HOTSEAT) showTutorial(); };
     decks.appendChild(b);
@@ -2016,6 +2033,115 @@ function showCredits(){
   box.appendChild(row); m.appendChild(box);
 }
 document.getElementById('btnMenu').onclick=showMenu;
+
+/* ============================ ONLINE ============================ */
+let NET=null, LOBBY={games:[],online:0,you:null}, HOSTING=null, NET_NOTE='', SYNC_QUEUED=false;
+function netSend(o){ if(NET && NET.readyState===1) NET.send(JSON.stringify(o)); }
+/* The whole table, as the OTHER player should see it. */
+function snapshot(){
+  return JSON.parse(JSON.stringify({a:G.you,b:G.bot,turn:G.turn,moves:G.moves,log:G.log.slice(0,80),
+    over, win:G.winner?G.winner.seat:0, ended:G.ended||''}));
+}
+function applySnapshot(sn){
+  G={you:sn.b, bot:sn.a, turn:sn.turn, actor:'bot', moves:sn.moves, log:sn.log, ended:sn.ended};
+  over=!!sn.over; if(sn.win) G.winner = G.you.seat===sn.win ? G.you : G.bot;
+  sel=null; pend=null;
+}
+function netSync(){                       // once per burst of changes, not once per render
+  if(SYNC_QUEUED) return; SYNC_QUEUED=true;
+  Promise.resolve().then(()=>{ SYNC_QUEUED=false; if(ONLINE) netSend({t:'msg',data:{k:'state',s:snapshot()}}); });
+}
+/* A message from the opponent's browser. */
+function netOn(d){
+  if(!ONLINE || !d || !d.s) return;
+  applySnapshot(d.s);
+  if(d.k==='end' && !over){ G.actor='you'; startTurn(); }     // their turn is done: ours begins
+  else render();
+}
+function netStart(m){                     // the lobby paired us
+  LOBBY_OPEN=false;
+  ONLINE=true; HOTSEAT=false; HOSTING=null; STARTED=true; NAMES={me:myName(),opp:m.opp||'Opponent'};
+  hideMenu();
+  const other=Object.keys(DECKS).find(k=>k!==m.deck)||m.deck;
+  document.getElementById('deckPick').value = m.seat===1 ? m.deck : other;
+  if(m.seat===1){ YOUR_DECK=m.deck; pickBotDeck=()=>other; newGame(); }     // the host deals and goes first
+  else { G.actor='bot'; G.moves=0; over=false; G.winner=null;              // wait for the host's table
+    G.log=[]; say('sys','Connected to '+NAMES.opp+'. Setting up the table…'); render(); }
+}
+function netGone(why){                    // the opponent left, or the line dropped
+  if(!ONLINE || over) return;
+  over=true; G.winner=G.you; G.ended=why; say('sys',why); render();
+}
+function netLeave(){ if(ONLINE){ netSend({t:'leave'}); ONLINE=false; } if(HOSTING){ netSend({t:'cancel'}); HOSTING=null; } }
+function myName(){ let n=''; try{ n=localStorage.getItem('scrapkin-name')||''; }catch(e){} return n||'Player'; }
+function netConnect(){
+  if(NET && NET.readyState<=1) return;
+  NET_NOTE='Connecting…';
+  NET=new WebSocket(NET_URL.replace(/\/$/,'')+'/ws');
+  NET.onopen=()=>{ NET_NOTE=''; netSend({t:'hello',name:myName()}); };
+  NET.onmessage=e=>{
+    if(e.data==='pong') return;
+    let m; try{ m=JSON.parse(e.data); }catch(x){ return; }
+    if(m.t==='lobby'){ LOBBY=m; if(LOBBY_OPEN) showLobby(); }
+    else if(m.t==='start') netStart(m);
+    else if(m.t==='msg') netOn(m.data);
+    else if(m.t==='peerLeft') netGone('Your opponent left the game.');
+    else if(m.t==='error'){ NET_NOTE=m.why; if(LOBBY_OPEN) showLobby(); }
+  };
+  NET.onclose=()=>{ NET=null; HOSTING=null; NET_NOTE='Not connected to the lobby.'; netGone('The connection was lost.'); ONLINE=false; if(LOBBY_OPEN) showLobby(); };
+}
+if(typeof window!=='undefined') setInterval(()=>{ if(NET && NET.readyState===1) NET.send('ping'); },25000);   // keeps the line open
+
+/* The lobby: games waiting for an opponent, and a button to host your own. */
+let LOBBY_OPEN=false;
+function showLobby(){
+  netConnect(); LOBBY_OPEN=true;
+  const m=document.getElementById('menu'); m.replaceChildren(); m.className='on';
+  const box=el('div',null,'menu-box');
+  box.appendChild(el('h1','Online'));
+  box.appendChild(el('div',NET_NOTE || (LOBBY.online+' player'+(LOBBY.online===1?'':'s')+' in the lobby'),'sub'));
+  const close=()=>{ LOBBY_OPEN=false; };
+
+  const nameRow=el('div',null,'menu-row'); nameRow.style.marginTop='0';
+  nameRow.appendChild(el('span','Your name'));
+  const inp=document.createElement('input'); inp.value=myName()==='Player'?'':myName(); inp.maxLength=20; inp.placeholder='Player';
+  inp.style.cssText='font:inherit;padding:7px 10px;border-radius:7px;background:#3F332B;color:#F3E9DC;border:1px solid #4E3F35;width:180px';
+  inp.onchange=()=>{ try{ localStorage.setItem('scrapkin-name',inp.value.trim()); }catch(e){} netSend({t:'hello',name:myName()}); };
+  nameRow.appendChild(inp); box.appendChild(nameRow);
+
+  if(HOSTING){
+    box.appendChild(el('div','Your game is in the list','lab'));
+    const sh=el('div',null,'sheet');
+    sh.appendChild(el('div','Waiting for an opponent to join your '+DECKS[HOSTING].name+' game. Keep this page open — the game starts by itself when someone joins.'));
+    const row=el('div',null,'menu-row'); row.style.marginTop='12px';
+    const cx=el('button','Stop hosting','warn'); cx.onclick=()=>{ netSend({t:'cancel'}); HOSTING=null; showLobby(); }; row.appendChild(cx);
+    sh.appendChild(row); box.appendChild(sh);
+  } else {
+    box.appendChild(el('div','Host a game — pick your deck','lab'));
+    const decks=el('div',null,'decks');
+    Object.keys(DECKS).forEach(k=>{
+      const b=el('button',null,'deckbtn bg-'+k);
+      b.appendChild(el('b',DECKS[k].name)); b.appendChild(document.createTextNode(DECKS[k].blurb||''));
+      b.onclick=()=>{ inp.onchange(); HOSTING=k; netSend({t:'host',deck:k}); showLobby(); };
+      decks.appendChild(b);
+    });
+    box.appendChild(decks);
+    const others=LOBBY.games.filter(g=>g.id!==LOBBY.you);
+    box.appendChild(el('div',others.length?'Games waiting for an opponent':'No games are waiting right now','lab'));
+    others.forEach(g=>{
+      const mine=Object.keys(DECKS).find(k=>k!==g.deck)||g.deck;
+      const row=el('div',null,'sheet'); row.style.cssText='display:flex;align-items:center;gap:12px;text-align:left;padding:10px 14px';
+      const t=el('div'); t.style.flex='1';
+      t.appendChild(el('b',g.name)); t.appendChild(document.createTextNode(' plays '+(DECKS[g.deck]?DECKS[g.deck].name:g.deck)+' — you would play '+DECKS[mine].name));
+      row.appendChild(t);
+      const j=el('button','Join','go'); j.onclick=()=>{ inp.onchange(); close(); netSend({t:'join',id:g.id}); }; row.appendChild(j);
+      box.appendChild(row);
+    });
+  }
+  const row=el('div',null,'menu-row');
+  const back=el('button','Back'); back.onclick=()=>{ close(); if(HOSTING){ netSend({t:'cancel'}); HOSTING=null; } showMenu(); }; row.appendChild(back);
+  box.appendChild(row); m.appendChild(box);
+}
 
 /* Which picture each card is currently using. */
 (function listArt(){
