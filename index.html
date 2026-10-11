@@ -1,0 +1,1926 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scrapkin — playtest</title>
+<style>
+:root{
+  --bg:#2A211C; --panel:#352A24; --panel2:#3F332B; --line:#4E3F35;
+  --ink:#F3E9DC; --soft:#BFAE9E; --faint:#8C7B6C;
+  --cloth:#E0708F; --wood:#C79A6A; --clay:#E0925B; --tin:#7FB0CE; --glass:#AE92D8; --plastic:#3FD0BE;
+  --good:#7BC98F; --bad:#E4736B; --warn:#E8C066;
+  --card:#F6EEE1; --cink:#2A211C;      /* card face and card ink */
+}
+body{
+  background:
+    radial-gradient(120% 80% at 50% -10%, #3B2E26 0%, transparent 60%),
+    #2A211C;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink); font:14px/1.45 "Trebuchet MS",system-ui,sans-serif;
+  padding:12px; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1fr 300px;gap:12px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+
+h1{font-size:18px;letter-spacing:-.01em}
+.bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.bar .sp{flex:1}
+.bar a{text-decoration:none}
+.pick{font-size:12px;color:var(--soft);display:flex;align-items:center;gap:5px}
+.pick select{font:inherit;font-size:12px;padding:5px 8px;border-radius:7px;background:#3F332B;color:var(--ink);border:1px solid var(--line)}
+button{
+  font:inherit;font-size:13px;padding:6px 12px;border-radius:7px;cursor:pointer;
+  background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+}
+button:hover:not(:disabled){background:#4A3C33}
+button:disabled{opacity:.35;cursor:default}
+button.go{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:700}
+button.warn{border-color:var(--warn);color:var(--warn)}
+
+.side{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.log{height:340px;overflow-y:auto;font-size:12px;line-height:1.5;display:flex;flex-direction:column-reverse;gap:2px}
+.log div{padding:2px 0;border-bottom:1px solid #3A2E27}
+.log .you{color:var(--good)} .log .bot{color:var(--bad)} .log .sys{color:var(--faint)}
+.stat{display:flex;justify-content:space-between;font-size:12px;color:var(--soft)}
+.stat b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+.zone{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+.zhead{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px;color:var(--soft);text-transform:uppercase;letter-spacing:.1em}
+.shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+
+/* ---------- real card frames ----------------------------------------------
+   The frame image is 750x1050 with a transparent window; the art is exactly the
+   window's size, so it sits behind at the window rect with no scaling. Item
+   frames have an opaque panel instead, so their art goes on top.
+   Text scales with the card via container units, so one layout serves the
+   shelf and the hand at different sizes.                                    */
+.cf{ position:relative; aspect-ratio:750/1050; container-type:inline-size; }
+.cf-art{ position:absolute; left:5%; top:14%; width:90%; height:37.1%; object-fit:cover; z-index:1; }
+.cf-frame{ position:absolute; inset:0; width:100%; height:100%; z-index:2; }
+.cf.item .cf-art{ z-index:3; }
+.cf-noart{ position:absolute; left:5%; top:14%; width:90%; height:37.1%; z-index:1;
+  display:grid; place-items:center; font-size:4.2cqw; letter-spacing:.12em; text-transform:uppercase;
+  color:rgba(0,0,0,.4); font-weight:700; text-align:center; }
+.cf-name{ position:absolute; left:5.3%; top:3.8%; width:69.4%; height:9.1%; z-index:4;
+  display:flex; align-items:baseline; gap:1cqw; padding:0 2cqw; font-weight:700; font-size:7.6cqw;
+  line-height:1; color:#2A211C; letter-spacing:-.01em; overflow:hidden; }
+.cf-seed{ font-size:.58em; font-weight:700; opacity:.75; letter-spacing:.04em; white-space:nowrap }
+.cf-matname{ position:absolute; left:0; right:0; bottom:6%; z-index:4; text-align:center;
+  font-weight:700; font-size:9cqw; text-transform:uppercase; letter-spacing:.14em;
+  color:#fff; text-shadow:0 0.3cqw 0.8cqw rgba(0,0,0,.6) }
+.cf-corner{ position:absolute; left:80%; top:3.8%; width:15%; height:9.1%; z-index:4;
+  display:grid; place-items:center; font-weight:700; font-size:6.6cqw; color:#2A211C; }
+.cf-text{ position:absolute; left:8.3%; top:53.8%; width:85%; height:40%; z-index:4;
+  display:flex; flex-direction:column; gap:0.7cqw; padding:1.6cqw 1.8cqw; color:#2A211C; overflow:hidden; }
+.cf-recipe{ font-size:5.2cqw; font-weight:700; letter-spacing:.02em; opacity:.72 }
+.cf-grow{ font-size:4.5cqw; font-style:italic; opacity:.8; margin-top:.4cqw }
+.cf-under{ font-size:4.4cqw; line-height:1.2; opacity:.72; margin-top:.6cqw;
+  border-top:1px dashed rgba(0,0,0,.25); padding-top:.6cqw }
+.cf-mv{ border-top:1px solid rgba(0,0,0,.18); padding-top:0.8cqw; }
+.cf-mv.dead{ opacity:.38 }
+.cf-mv.live{ cursor:pointer; border-radius:1.4cqw; }
+.cf-mv.live:hover{ background:rgba(0,0,0,.07) }
+.cf-mvh{ display:flex; align-items:baseline; gap:1.2cqw; font-weight:700; font-size:6cqw; line-height:1.1 }
+.cf-dmg{ margin-left:auto; font-size:6.6cqw }
+.cf-mvt{ font-size:4.9cqw; line-height:1.24; opacity:.75 }
+.cf-tag{ font-size:3.9cqw; padding:0.3cqw 1cqw; border-radius:1cqw; color:#241C18; font-weight:700;
+  text-transform:uppercase; letter-spacing:.05em }
+.cf-foot{ position:absolute; left:8.3%; bottom:0.2%; width:85%; z-index:4; font-size:4cqw;
+  color:#fff; text-shadow:0 0.2cqw 0.5cqw rgba(0,0,0,.55); display:flex; justify-content:space-between; text-transform:uppercase; letter-spacing:.05em }
+
+/* ---------- a slot holds a card sitting on its stack of materials ---------- */
+.slot{display:flex;flex-direction:column;align-items:stretch;gap:0;position:relative}
+.ch{
+  background:transparent; color:var(--cink);
+  padding:0; display:flex; flex-direction:column; position:relative;
+  filter:drop-shadow(0 6px 12px rgba(0,0,0,.5));
+  transition:transform .12s ease, filter .12s ease;
+}
+.ch:not(.empty):hover{transform:translateY(-2px)}
+.ch.empty{
+  background:transparent; box-shadow:none; color:var(--faint); font-size:12px;
+  border:1px dashed var(--line); border-radius:10px;
+  min-height:236px; align-items:center; justify-content:center;
+}
+.ch.sel .cf{outline:3px solid var(--ink); outline-offset:-3px; border-radius:4cqw}
+.ch.tgt{cursor:pointer} .ch.tgt .cf{outline:3px solid var(--warn); outline-offset:-3px; border-radius:4cqw}
+.ch.spent{filter:saturate(.55) brightness(.86)}
+
+.art{
+  position:relative; aspect-ratio:4/3; width:100%;
+  display:grid; place-items:center; overflow:hidden;
+  border-bottom:1px solid rgba(0,0,0,.2);
+}
+.art img{width:100%;height:100%;object-fit:cover;display:block}
+.art .ph{
+  font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:rgba(0,0,0,.42);font-weight:700;text-align:center;padding:0 6px;
+}
+.chbody{padding:7px 9px 8px;display:flex;flex-direction:column;gap:3px;flex:1}
+.chname{font-weight:700;font-size:14px;line-height:1.1;display:flex;justify-content:space-between;gap:6px;align-items:baseline;letter-spacing:-.01em}
+.pill{font-size:9px;text-transform:uppercase;letter-spacing:.08em;padding:1px 5px;border-radius:4px;color:#241C18;font-weight:700;white-space:nowrap}
+.chfoot{
+  margin-top:auto;padding-top:5px;font-size:9.5px;letter-spacing:.05em;
+  color:rgba(0,0,0,.5);text-transform:uppercase;display:flex;justify-content:space-between;gap:6px;
+}
+
+/* the material stack, drawn as card edges tucked under the character */
+.stack{display:flex;justify-content:center;padding:0 4px;margin-top:-4px}
+.mat{
+  width:38px;height:34px;border-radius:0 0 6px 6px;margin:0 -5px;
+  position:relative;overflow:hidden;cursor:default;
+  box-shadow:0 3px 7px rgba(0,0,0,.45);
+}
+.mat img{ position:absolute;left:0;top:0;width:100%;height:auto;min-height:100%;
+  object-fit:cover;object-position:top center; }
+.mat span{
+  position:absolute;left:0;right:0;bottom:2px;text-align:center;
+  font-size:9px;font-weight:700;letter-spacing:.06em;color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 4px rgba(0,0,0,.8);
+}
+.mat.pick{cursor:pointer;outline:2px solid var(--ink);outline-offset:1px;z-index:2}
+.mat.picked{opacity:.28;outline:2px dashed var(--bad);outline-offset:1px}
+.mat.under{box-shadow:0 3px 7px rgba(0,0,0,.45), inset 0 0 0 2px var(--ink)}
+.stackempty{font-size:10px;color:var(--bad);text-align:center;padding:4px 0}
+
+.mvrow{border-top:1px solid rgba(0,0,0,.12);padding-top:4px;margin-top:1px}
+.mvrow.dead{opacity:.4}
+.mvhead{font-size:11.5px;display:flex;gap:5px;align-items:center;font-weight:700}
+.mvtext{font-size:10px;color:rgba(0,0,0,.62);line-height:1.32;margin-top:1px}
+.mvwhy{color:#A8322A;font-weight:700}
+.mvbtn{
+  font-size:11.5px;padding:4px 7px;width:100%;text-align:left;display:flex;gap:5px;
+  align-items:center;background:#EFE4D4;color:var(--cink);border:1px solid rgba(0,0,0,.22);
+}
+.mvbtn:hover:not(:disabled){background:#E4D5BF}
+.tool{font-size:10px;color:#8A5A12;font-weight:700;letter-spacing:.03em}
+.note{font-size:10px;color:var(--faint)}
+
+.hand{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
+.hc{
+  border-radius:9px;overflow:visible;
+  font-size:12px;cursor:pointer;width:152px;
+  box-shadow:0 4px 10px rgba(0,0,0,.4), inset 0 0 0 1px rgba(0,0,0,.18);
+  transition:transform .12s ease;
+}
+.hc:hover{transform:translateY(-3px)}
+.hc.sel .cf{outline:3px solid var(--ink); outline-offset:-3px; border-radius:4cqw}
+.hc.tgt .cf{outline:3px solid var(--warn); outline-offset:-3px; border-radius:4cqw}
+.hc.no{filter:saturate(.4) brightness(.82)}
+.hcArt{position:relative;aspect-ratio:16/9;width:100%;display:grid;place-items:center;overflow:hidden;border-bottom:1px solid rgba(0,0,0,.2)}
+.hcArt img{width:100%;height:100%;object-fit:cover;display:block}
+.hcArt .ph{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(0,0,0,.42);font-weight:700;text-align:center;padding:0 5px}
+.hcBody{padding:6px 8px 7px}
+.hcTop{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-weight:700;font-size:12.5px}
+.hc .r{font-size:9.5px;color:rgba(0,0,0,.55);margin-top:2px}
+.hm{margin-top:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:3px}
+.hmh{font-size:11px;font-weight:700;display:flex;gap:5px;align-items:center}
+.hmt{font-size:9.5px;color:rgba(0,0,0,.62);line-height:1.3}
+.hunder{font-size:9.5px;color:#8A5A12;font-weight:600;line-height:1.3;margin-top:4px}
+.hc.matcard{ width:132px; }
+
+.bg-neutral{background:#8C7B6C}
+.ring{font-size:10.5px;color:var(--soft);line-height:1.6}
+.ring b{color:var(--ink)}
+
+.prompt{background:#463629;border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:7px 10px;font-size:12px;margin-bottom:8px}
+.sheet{background:var(--panel2);border:1px solid var(--ink);border-radius:10px;padding:16px 18px;margin-bottom:10px;font-size:14px;line-height:1.55}
+.sheet h2{font-size:16px;margin-bottom:8px}
+.sheet ol{margin:0 0 10px 20px} .sheet li{margin-bottom:5px}
+.sheet .q{margin:12px 0 5px;font-weight:700}
+.sheet textarea{width:100%;min-height:64px;font:inherit;font-size:13px;padding:7px;border-radius:7px;background:#2A211C;color:var(--ink);border:1px solid var(--line)}
+.sheet button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.sheet .row{display:flex;gap:6px;flex-wrap:wrap}
+.banner{background:var(--panel2);border:1px solid var(--ink);border-radius:10px;padding:14px;text-align:center;font-size:15px;font-weight:700;margin-bottom:10px}
+
+.bg-cloth{background:var(--cloth)} .bg-wood{background:var(--wood)} .bg-clay{background:var(--clay)}
+.bg-tin{background:var(--tin)} .bg-glass{background:var(--glass)} .bg-plastic{background:var(--plastic)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <div class="bar">
+      <h1>Scrapkin — playtest</h1>
+      <span class="sp"></span>
+      <span id="turnInfo" class="note"></span>
+      <button id="btnEnd" class="go">End turn</button>
+      <label class="pick">Deck <select id="deckPick"></select></label>
+      <button id="btnNew">New game</button>
+      <label class="pick" id="slimWrap"><input type="checkbox" id="slimRule" checked> Slim rules</label>
+      <label class="pick" id="scrapRuleWrap"><input type="checkbox" id="scrapRule" checked> Scrap pile rule</label>
+    </div>
+    <div id="banner"></div>
+    <div id="overlay"></div>
+    <div id="prompt"></div>
+
+    <div class="zone">
+      <div class="zhead"><span id="botLabel">Lantern (bot)</span><span class="sp"></span><span id="botCounts" class="note"></span></div>
+      <div class="shelf" id="botShelf"></div>
+    </div>
+
+    <div class="zone">
+      <div class="zhead"><span id="youLabel">Soft Goods (you)</span><span class="sp"></span><span id="youCounts" class="note"></span></div>
+      <div class="shelf" id="youShelf"></div>
+    </div>
+
+    <div class="zone">
+      <div class="zhead">Your hand
+        <span class="note" id="handNote" style="text-transform:none;letter-spacing:0"></span>
+        <span class="sp"></span>
+        <button id="btnMelt">Melt 2 materials into 1 (free, once a turn)</button>
+        <button id="btnScrap">Scrap (free, once a turn)</button>
+        <button id="btnSalv">Salvage 1 from your scrap pile (free, once a turn)</button>
+      </div>
+      <div class="hand" id="hand"></div>
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="stat"><span>Turn</span><b id="sTurn">1</b></div>
+    <div class="stat"><span>Moves left</span><b id="sMoves">3</b></div>
+    <div class="stat"><span>Scrap used</span><b id="sScrap">no</b></div>
+    <div class="stat"><span>Your prizes left</span><b id="sPrizeYou">2</b></div>
+    <div class="stat"><span>Bot prizes left</span><b id="sPrizeBot">2</b></div>
+    <hr style="border:0;border-top:1px solid var(--line)">
+    <div class="note">First build on turn: <b id="sFirstBuild">—</b></div>
+    <div class="note">Shelf full on turn: <b id="sShelfFull">—</b></div>
+    <div class="note">Grows so far: <b id="sGrows">0</b></div>
+    <div class="note">Items played: <b id="sItems">0</b></div>
+    <hr style="border:0;border-top:1px solid var(--line)">
+    <details id="artWrap">
+      <summary style="cursor:pointer;font-size:12px;color:var(--soft)">Art files wanted</summary>
+      <div id="artList" class="ring" style="margin-top:6px;max-height:200px;overflow-y:auto"></div>
+    </details>
+    <hr style="border:0;border-top:1px solid var(--line)">
+    <div class="ring" id="v2Wrap">
+      <b>What's different in v2</b><br>
+      Every character has a <b>free move</b> and a <b>burn move</b>. A burn move takes materials
+      off the character's own stack to fire — so hitting hard costs you health, and can switch
+      off your own moves.<br>
+      Some moves <b>read the stack</b>: 1 damage for each Cloth underneath, more while you are
+      big, more when you are nearly gone.<br>
+      <b>Scrap pile rule</b> (switch at the top): destroyed and burned materials go to their
+      owner's scrap pile, and once a turn you may take one back into your hand. Switch it off
+      and they are gone for good.<br>
+      <b>Slim rules</b> (switch at the top): the same cards with a shorter turn. Draw 1 card and
+      2 materials, no choosing. No melt, no salvage, no scrap pile — your one free action is
+      scrapping a character from your hand into a material of any type you name. Open with 4 cards and 4 materials. Prize characters
+      grow from any character of their material, there are no prize items, and an empty shelf
+      never loses you the game.<br>
+      <b>Rebuild</b> (slim rules): if your opponent breaks your last character, your next turn
+      has 4 moves and what you build may act straight away.
+    </div>
+    <hr style="border:0;border-top:1px solid var(--line)">
+    <div class="ring" id="immWrap">
+      <b>Immunity</b> — a character shrugs off one attack type, but only while a material of its
+      own type is still in its stack.<br>
+      Cloth ▸ Tin &nbsp; Tin ▸ Clay &nbsp; Clay ▸ Glass<br>
+      Glass ▸ Wood &nbsp; Wood ▸ Plastic &nbsp; Plastic ▸ Cloth
+    </div>
+    <hr style="border:0;border-top:1px solid var(--line)">
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script src="cards.js"></script>
+<script>
+/* ============================ DATA ============================ */
+const SHRUGS = {cloth:'tin', tin:'clay', clay:'glass', glass:'wood', wood:'plastic', plastic:'cloth'};
+const ABBR = {cloth:'CL', wood:'WD', clay:'CY', tin:'TN', glass:'GL', plastic:'PL'};
+
+/* Card data lives in cards.js, loaded just above this script. */
+
+/* ---- readable rules text, generated from the same data the engine runs on
+       so the card can never describe something the code doesn't do ---- */
+const FX_TEXT = {
+  draw1:'Draw a card.',
+  draw2:'Draw two cards.',
+  drawIfBreak:'Draw a card if this breaks a character.',
+  smother:"That character can't use its own-type move on its next turn.",
+  peek:'Look at the top card of your prize deck.',
+  layer:'Put a Cloth from your hand onto this character.',
+  mend:'Put a material from your hand onto a character you control.',
+  extraPrize:'If this breaks a character, take an extra prize.',
+  pierce:'Ignores immunity.',
+  toolFirst:'If that character has a Tool, destroy its Tool instead.',
+};
+const UNDER_TEXT = {
+  drawOnBreakUnder:'Underneath: draw a card whenever this character breaks an enemy character.',
+  thornsUnder:'Underneath: when this character breaks, deal 1 damage to whatever broke it.',
+};
+function mvText(mv){
+  if(mv.txt) return mv.txt;              // authored text from the printed card
+  const bits=[];
+  if(mv.spend) bits.push(`Spend this character's ${mv.spend}.`);
+  let dmg = `${mv.d} damage`;
+  if(mv.fx==='two') dmg += ' to two different characters';
+  if(mv.fx==='all') dmg += ' to every enemy character';
+  bits.push(dmg+'.');
+  if(FX_TEXT[mv.fx]) bits.push(FX_TEXT[mv.fx]);
+  return bits.join(' ');
+}
+function deadReason(ch,mv){
+  if(ch.smothered && mv.burn) return 'smothered — no burn moves this turn';
+  if(mv.burn){ const have=counts(ch.stack);
+    for(const t in mv.burn) if((have[t]||0)<mv.burn[t]) return `not enough ${t} left to burn`;
+    return ''; }
+  if(!hasType(ch,mv.t)) return `no ${mv.t} left in the stack`;
+  return '';
+}
+
+/* ============================ HELPERS ============================ */
+const rnd = n => Math.floor(Math.random()*n);
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+const isChar = n => !!C[n];
+const cardType = n => C[n] ? C[n].t : null;
+
+function buildDeck(key){
+  const d = DECKS[key], main=[];
+  // Copy counts live in the generated COPIES block so print and play cannot disagree.
+  d.main.forEach(n=>{for(let i=0;i<COPIES.char;i++) main.push(n)});
+  ITEMS6.forEach(n=>{for(let i=0;i<COPIES.item;i++) main.push(n)});
+  const mats=[];
+  for(const t in d.mats) for(let i=0;i<d.mats[t];i++) mats.push({mat:t});
+  // Slim: no prize items. The same number of prizes, made of the prize characters alone.
+  let prize=d.prize.slice();
+  if(SLIM){ const pcs=[...new Set(prize.filter(isChar))]; prize=prize.map((_,i)=>pcs[i%pcs.length]); }
+  return {name:d.name, focus:d.focus, main:shuffle(main), mats:shuffle(mats), prize:shuffle(prize)};
+}
+
+function newPlayer(key,isBot){
+  const d = buildDeck(key);
+  return {key,isBot,name:d.name,focus:d.focus,
+    deck:d.main, matDeck:d.mats, prize:d.prize,
+    hand:[], shelf:[null,null,null], discard:[], scrap:[], salvUsed:false, burns:0, frees:0,
+    scrapUsed:false, meltUsed:false, grows:0, items:0, firstBuild:null, shelfFull:null};
+}
+
+/* stack entries: {t:type, under:name|null} — the card this material used to be */
+function counts(stack){const o={};stack.forEach(s=>o[s.t]=(o[s.t]||0)+1);return o;}
+function hasType(ch,t){return ch.stack.some(s=>s.t===t);}
+function immuneTo(ch){
+  const def=C[ch.name];
+  return hasType(ch,def.t) ? SHRUGS[def.t] : null;
+}
+/* A free move needs its material under the character. A burn move needs enough of what
+   it burns — and a smothered character can't burn at all. */
+function moveLive(ch,mv){
+  if(mv.burn){
+    if(ch.smothered) return false;
+    const have=counts(ch.stack);
+    for(const t in mv.burn) if((have[t]||0)<mv.burn[t]) return false;
+    return true;
+  }
+  return hasType(ch,mv.t);
+}
+/* Scrap pile rule, switchable from the top bar: destroyed and burned materials go to their
+   owner's scrap pile, and once a turn you may salvage one back into your hand. */
+let SCRAP_RULE = true;
+/* Slim rules, switchable from the top bar. The same cards, a much shorter turn:
+     - draw 1 card and 2 materials, no choosing
+     - no melting, no salvaging, no scrap pile; the one free action is scrapping a
+       character from your hand for a material of a type you name
+     - open with 4 cards and 4 materials
+     - a prize character grows from ANY character of its material, so it cannot get stuck,
+       and the prize deck is prize characters only
+     - you lose by running out of cards, never for having an empty shelf            */
+let SLIM = true;
+/* Rebuild — the catch-up rule, part of the slim rules. If your opponent broke your last
+   character on their turn, your next turn has 4 moves and what you build may act straight
+   away. It only counts when THEY emptied your shelf: burning or scrapping your own last
+   character earns nothing (measured: without that wording, scrapping yourself won 69%). */
+let REBUILD_RULE = true;
+/* Tester mode: the version strangers play. Hides the designer switches, shows a short
+   tutorial on the first visit and three questions when a game ends. make-online.js sets
+   BUILD_TESTER; add ?tester to the address to preview it here. */
+const BUILD_TESTER = true;
+const TESTER = BUILD_TESTER || (typeof location!=='undefined' && /[?&]tester\b/.test(location.search||''));
+/* Where a tester's answers should go. Leave empty and they get a Copy button instead. */
+const FEEDBACK_URL = '';
+function toScrap(p,type){ if(SCRAP_RULE&&!SLIM) p.scrap.push(type); }
+/* Pay a burn move's cost out of the character's own stack. Returns what was burned. */
+function payBurn(p,ch,mv){
+  if(!mv.burn) return [];
+  const gone=[];
+  for(const t in mv.burn) for(let k=0;k<mv.burn[t];k++){
+    let i=ch.stack.findIndex(s=>s.t===t&&!s.under);       // plain materials first
+    if(i<0) i=ch.stack.findIndex(s=>s.t===t);
+    if(i<0) continue;
+    const m=ch.stack.splice(i,1)[0];
+    if(m.under) p.discard.push(m.under); else toScrap(p,t);
+    gone.push(t);
+  }
+  if(gone.length){ say(p.isBot?'bot':'you',`${ch.name} burns ${gone.join(' + ')} for ${mv.n}.`); p.burns=(p.burns||0)+1; }
+  return gone;
+}
+/* The stack as it will be once the burn is paid — for working out damage in advance. */
+function afterBurn(ch,mv){
+  if(!mv.burn) return ch;
+  const stack=ch.stack.slice();
+  for(const t in mv.burn) for(let k=0;k<mv.burn[t];k++){ const i=stack.findIndex(s=>s.t===t); if(i>=0) stack.splice(i,1); }
+  return {name:ch.name,stack};
+}
+
+/* ============================ STATE ============================ */
+let G=null, sel=null, pend=null, over=false;
+
+let YOUR_DECK = 'cloth';
+function pickBotDeck(mine){
+  const opts = Object.keys(DECKS).filter(k=>k!==mine);
+  return opts[rnd(opts.length)];
+}
+function newGame(){
+  const mine = YOUR_DECK, theirs = pickBotDeck(mine);
+  G={you:newPlayer(mine,false), bot:newPlayer(theirs,true), turn:1, actor:'you', moves:3, log:[]};
+  document.getElementById('youLabel').textContent = DECKS[mine].name + ' (you)';
+  document.getElementById('botLabel').textContent = DECKS[theirs].name + ' (bot)';
+  // opening hands
+  for(const p of [G.you,G.bot]){
+    for(let i=0;i<(SLIM?4:5);i++) drawMain(p,true);
+    for(let i=0;i<(SLIM?4:7);i++) drawMat(p,true);   // 4 left 71% of openings unable to build
+  }
+  sel=null;pend=null;over=false;
+  say('sys',`Game start. You: ${DECKS[mine].name} (${mine}). Bot: ${DECKS[theirs].name} (${theirs}) — a neutral matchup, neither shrugs the other off.`);
+  say('sys','You go first — you skip your material draw this turn.');
+  // Turn one for the first player: they still take their main-deck draw,
+  // only the material draw is skipped.
+  drawMain(G.you);
+  render();
+}
+function say(who,txt){G.log.unshift({who,txt}); }
+
+function drawMain(p,silent){
+  if(!p.deck.length){ if(!silent) lose(p,'could not draw from an empty main deck'); return false; }
+  const c=p.deck.pop(); p.hand.push(c); return c;
+}
+function drawMat(p){ if(!p.matDeck.length) return false; const c=p.matDeck.pop(); p.hand.push(c); return c.mat; }
+
+function handMats(p){ return p.hand.map((c,i)=>({c,i})).filter(x=>x.c.mat); }
+function canPay(p,recipe,already){
+  const have={}; handMats(p).forEach(x=>have[x.c.mat]=(have[x.c.mat]||0)+1);
+  for(const t in recipe){ const need=recipe[t]-((already&&already[t])||0); if(need>0 && (have[t]||0)<need) return false; }
+  return true;
+}
+function payFrom(p,recipe,already){
+  const taken=[];
+  for(const t in recipe){
+    let need=recipe[t]-((already&&already[t])||0);
+    while(need>0){
+      const idx=p.hand.findIndex(c=>c.mat===t);
+      if(idx<0) break;
+      p.hand.splice(idx,1); taken.push({t,under:null}); need--;
+    }
+  }
+  return taken;
+}
+
+/* ============================ ACTIONS ============================ */
+/* Can this player put anything on the shelf this turn — building now, or after
+   using the free scrap to make one more material? */
+function canDevelop(p){
+  const chars = p.hand.filter(isChar);
+  if(chars.some(c=>canPay(p,C[c].r))) return true;
+  if(p.scrapUsed) return false;
+  const types = new Set(chars.map(c=>C[c].t));
+  for(const t of types){
+    const ghost = {hand:p.hand.concat([{mat:t}])};
+    if(chars.some(c=>canPay(ghost,C[c].r))) return true;
+  }
+  return false;
+}
+
+function opp(p){ return p===G.you?G.bot:G.you; }
+function cur(){ return G.actor==='you'?G.you:G.bot; }
+
+function buildChar(p,handIdx,slot){
+  const name=p.hand[handIdx]; const def=C[name];
+  // A prize character is earned, then grown onto the card it names. It can never be
+  // built from scratch — that would skip the whole point of earning it.
+  if(def.prize){ if(!p.isBot) say('sys',`${name} can only be grown onto ${def.growFrom}, never built.`); return false; }
+  if(!canPay(p,def.r)) return false;
+  p.hand.splice(handIdx,1);
+  const stack=payFrom(p,def.r);
+  p.shelf[slot]={name,stack,tool:null,fresh:!p.rush,used:false,smothered:false,thimble:false};
+  if(p.firstBuild===null) p.firstBuild=G.turn;
+  if(p.shelf.every(Boolean)&&p.shelfFull===null) p.shelfFull=G.turn;
+  say(p.isBot?'bot':'you',`${p.name} builds ${name}.`);
+  return true;
+}
+
+
+/* One rule, three callers (this function, the bot, and the board UI). There are two
+   routes up: a seed grows into any adult of its own material, and a prize character
+   grows from the single named card printed on it. Nothing grows the turn it arrives. */
+function canGrowOnto(name,base,p){
+  const def=C[name], bd=base&&C[base.name];
+  if(!def||!bd) return false;
+  // Ambush lifts the one-turn wait; otherwise nothing grows onto a fresh build.
+  if(base.fresh && !(p&&p.growFresh)) return false;
+  // Bubble lets a prize take any character of its own material as a base.
+  if(def.growFrom) return def.growFrom===base.name || !!((SLIM||(p&&p.anyGrow))&&bd.t===def.t);
+  return !!bd.seed && def.grow===bd.t;
+}
+/* Armature says a character "holds one extra material beyond its recipe", which only
+   means anything if there is a cap. This is it: an effect may top a character back up to
+   its recipe, but never past it. Materials inherited by growing are left alone, or the
+   whole growth ladder would break. Turns Layer/Set/Glaze/Stuff/Mend into repair moves. */
+function roomOn(ch){
+  if(!ch) return false;
+  const need=Object.values(C[ch.name].r).reduce((a,b)=>a+b,0);
+  const bonus=(ch.tool==='Armature'?1:0)
+            + (ch.stack.some(s=>s.under==='Whittle')?1:0);   // Whittle underneath
+  return ch.stack.length < need + bonus;
+}
+
+function growChar(p,handIdx,slot){
+  const name=p.hand[handIdx], def=C[name];
+  const base=p.shelf[slot]; if(!base) return false;
+  const bd=C[base.name];
+  if(!canGrowOnto(name,base,p)) return false;
+  const stack=base.stack.slice();
+  stack.push({t:bd.t,under:base.name});
+  const have=counts(stack);
+  if(!canPay(p,def.r,have)) return false;
+  p.hand.splice(handIdx,1);
+  const extra=payFrom(p,def.r,have);
+  p.shelf[slot]={name,stack:stack.concat(extra),tool:base.tool?null:null,
+                 fresh:false,used:false,smothered:false,thimble:false};
+  if(base.tool){ p.discard.push(base.tool); say('sys',`${base.tool} falls off ${base.name}.`); }
+  p.grows++;
+  // Ferro underneath: growing on top of it is free. The callers decrement a move after
+  // this returns, so hand it back here rather than changing all of them.
+  if(base.name==='Ferro'){ G.moves++; say('sys','Ferro underneath: growing costs no move.'); }
+  say(p.isBot?'bot':'you',`${p.name} grows ${base.name} into ${name}.`);
+  if(p.shelf.every(Boolean)&&p.shelfFull===null) p.shelfFull=G.turn;
+  return true;
+}
+
+function damageOne(attacker,defP,slot,type,pierce,chooserIsHuman,picks){
+  const ch=defP.shelf[slot]; if(!ch) return {broke:false,dealt:0};
+  if(!pierce && immuneTo(ch)===type){ say('sys',`${ch.name} shrugs off ${type}.`); return {broke:false,dealt:0,immune:true}; }
+  if(ch.thimble){ ch.thimble=false; say('sys',`Thimble blocks the attack on ${ch.name}.`); return {broke:false,dealt:0}; }
+  return {ok:true};
+}
+
+/* How much of an attack actually lands: Cover eats one outright, Shelter shaves one off. */
+function incoming(defP,ch,dmg){
+  if(ch.covered){ ch.covered=false; say('sys',`${ch.name} was covered — the attack does nothing.`); return 0; }
+  if(ch.marked && dmg>0){ ch.marked=false; dmg+=1; say('sys',`${ch.name} was marked — 1 more damage.`); }
+  if(defP.shelter) return Math.max(0,dmg-1);
+  return dmg;
+}
+
+/* remove n materials from ch.stack at given indices (already chosen) */
+function destroyMaterials(defP,slot,idxs){
+  const ch=defP.shelf[slot];
+  const own=C[ch.name].t, hadOwn=hasType(ch,own);
+  idxs.sort((a,b)=>b-a).forEach(i=>{
+    const m=ch.stack[i]; if(!m) return;
+    ch.stack.splice(i,1);
+    // Plugs underneath comes back to hand instead of the discard pile.
+    if(m.under==='Plugs'){ defP.hand.push(m.under); say('sys','Plugs pops off and returns to hand.'); }
+    else if(m.under) defP.discard.push(m.under);
+    else toScrap(defP,m.t);
+    if(ch.tool==='Music Box'){ drawMain(defP); say('sys',`Music Box draws ${defP.name} a card.`); }
+    // Cuppy underneath: just remember it got hurt. The patching happens at the start of
+    // its owner's next turn, which is what keeps attack resolution uninterruptible —
+    // nothing has to stop mid-attack to ask anybody anything.
+    if(ch.stack.some(s=>s.under==='Cuppy')) ch.cuppyHurt=true;
+  });
+  // Craze asks whether this hit took the defender's last own-type material. Only the
+  // player being attacked counts — Shard's thorns land on the attacker and must not.
+  if(defP!==cur() && hadOwn && !hasType(ch,own)) G.strippedOwn=true;
+}
+
+function checkBreak(attP,defP,slot){
+  const ch=defP.shelf[slot]; if(!ch) return false;
+  if(ch.stack.length>0) return false;
+  const def=C[ch.name];
+  say(attP.isBot?'bot':'you',`${ch.name} breaks!`);
+  // Shard underneath: thorns
+  // Sequin: salvage a material as the thing comes apart. A broken character's stack is
+  // empty by definition, so this pulls from the material deck rather than the stack.
+  if(ch.tool==='Sequin'){
+    const mt=C[ch.name].t, mi=defP.matDeck.findIndex(m=>m.mat===mt);
+    if(mi>=0){ defP.hand.push(defP.matDeck.splice(mi,1)[0]);
+      say('sys',`Sequin salvages a ${mt} from ${ch.name}.`); }
+  }
+  // Spare Button caps what breaking this character is worth. Read before the Tool is
+  // discarded, or the card would do nothing — which is exactly what it did until now.
+  const worth = ch.tool==='Spare Button' ? 1 : def.brk;
+  if(ch.tool==='Spare Button' && def.brk>1) say('sys',`Spare Button: ${ch.name} is only worth 1 prize.`);
+  if(ch.tool) defP.discard.push(ch.tool);
+  defP.discard.push(ch.name);
+  defP.shelf[slot]=null;
+  if(attP===cur() && attP!==defP && defP.shelf.every(s=>!s)) defP.wipedByFoe=true;   // see REBUILD_RULE
+  takePrizes(attP,worth);
+  return true;
+}
+
+function takePrizes(p,n){
+  for(let i=0;i<n;i++){
+    if(!p.prize.length) break;
+    const c=p.prize.pop(); p.hand.push(c);
+    say(p.isBot?'bot':'you',`${p.name} takes a prize (${p.prize.length} left).`);
+  }
+  if(!p.prize.length){ win(p,'took their last prize card'); }
+}
+
+function win(p,why){ if(over) return; over=true; G.winner=p; say('sys',`${p.name} wins — ${why}.`); }
+function lose(p,why){ if(over) return; over=true; G.winner=opp(p); say('sys',`${p.name} loses — ${why}.`); }
+
+/* ============================ TURN ============================ */
+function startTurn(){
+  const p=cur();
+  p.scrapUsed=false; p.meltUsed=false;
+  p.shelter=false;
+  p.anyGrow=false;    // Bubble: a prize may grow from any character of its material
+  p.growFresh=false;  // Ambush: you may grow onto a character built this turn
+  p.salvUsed=false;
+  p.shelf.forEach(ch=>{ if(ch){ch.fresh=false;ch.used=false;ch.covered=false;ch.sealed=false; if(ch.tool==='Thimble')ch.thimble=true;
+    // Cuppy underneath: last turn's damage gets patched up now, before you act.
+    if(ch.cuppyHurt){ ch.cuppyHurt=false;
+      const ci=p.hand.findIndex(c=>c.mat==='clay');
+      if(ci>=0&&roomOn(ch)){ p.hand.splice(ci,1); ch.stack.push({t:'clay',under:null});
+        say('sys',`Cuppy underneath: ${ch.name} is patched with a Clay.`); }
+    }
+  } });
+  // draw
+  // One main-deck card is mandatory — otherwise you could dodge deck-out forever
+  // by only ever taking materials, and a whole win condition stops existing.
+  if(!p.deck.length){ lose(p,'could not draw from an empty main deck'); render(); return; }
+  const drew=drawMain(p);
+  if(!p.isBot) say('you',`You draw ${drew}.`); else say('bot','Bot draws a card.');
+  G.moves=3;
+  p.rush = SLIM && REBUILD_RULE && !!p.wipedByFoe && p.shelf.every(s=>!s);
+  p.wipedByFoe=false;
+  if(p.rush){ G.moves=4; p.rushes=(p.rushes||0)+1;
+    say('sys',`Rebuild: ${p.isBot?'the bot':'you'} lost every character last turn — 4 moves this turn, and anything built may act straight away.`); }
+  // No first-player penalty. It was there to offset going first being an advantage;
+  // measured across 18 deck pairings, going first is a ~6 point DISADVANTAGE, so the
+  // penalty was punishing the player already behind. Removing it changed nothing (43.6%
+  // either way), which is the tell that it was never doing the job it was written for.
+  if(SLIM){                       // one card, two materials, nothing to decide
+    const got=[drawMat(p),drawMat(p)].filter(Boolean);
+    if(!p.isBot) say('you',got.length?`You draw ${got.join(' and ')} material${got.length>1?'s':''}.`:'Your material deck is empty.');
+    afterDraw(p); return;
+  }
+  const free = 2;
+  if(!free){ afterDraw(p); return; }
+  if(p.isBot){ botDraw(p,free); afterDraw(p); return; }
+  pend={stage:'draw',left:free};
+  render();
+}
+
+/* the two free picks: either deck, in any combination */
+function takeDraw(which){
+  const p=G.you;
+  const got = which==='main' ? drawMain(p) : drawMat(p);
+  if(!got){ say('sys',`That deck is empty.`); render(); return; }
+  say('you',`You take ${which==='main'?got:got+' material'}.`);
+  if(--pend.left<=0){ pend=null; afterDraw(p); }
+  render();
+}
+function botDraw(p,n){
+  for(let i=0;i<n;i++){
+    const mats=handMats(p).length;
+    const wantMat = mats<4 || p.hand.filter(isChar).length>=3;
+    const got = (wantMat && p.matDeck.length) ? drawMat(p) : (drawMain(p)||drawMat(p));
+    if(!got) break;
+  }
+}
+function afterDraw(p){
+  // Empty-shelf loss. Two guards the written rule needs:
+  //  - it cannot fire before you have ever had a character out, or an opening
+  //    hand you can't immediately pay for loses you the game on turn one;
+  //  - "can't afford to build" must account for the free scrap, since scrapping
+  //    a card for a material is exactly how you dig out of this.
+  if(!SLIM && p.shelf.every(s=>!s) && p.firstBuild!==null && !canDevelop(p)){
+    lose(p,'began a turn with an empty shelf and no way to build'); render(); return;
+  }
+  if(p.isBot) setTimeout(botTurn,420);
+  render();
+}
+function endTurn(){
+  if(over) return;
+  sel=null;pend=null;
+  // A smother lasts through its victim's own turn, so it lifts as that turn ends.
+  // Marks only last the turn they were made.
+  cur().shelf.forEach(ch=>{ if(ch) ch.smothered=false; });
+  opp(cur()).shelf.forEach(ch=>{ if(ch) ch.marked=false; });
+  if(G.actor==='you'){ G.actor='bot'; } else { G.actor='you'; G.turn++; }
+  startTurn();
+}
+
+/* ============================ EFFECTS ============================ */
+/* Moves that act on your own side never ask for an enemy target. */
+const OWN_SIDE = new Set(['cover','putOnSelf','putOnAlly','remould','shelter','bearWeight','seal']);
+
+/* Pick the ally worth protecting: the one with most left to lose. */
+function bestAlly(p,exceptSlot){
+  let best=-1, bi=-1;
+  p.shelf.forEach((c,i)=>{ if(c && i!==exceptSlot && c.stack.length>best){ best=c.stack.length; bi=i; } });
+  return bi;
+}
+function applyOwnSide(p,ch,mv,mySlot){
+  const f=mv.fx;
+  if(f==='cover'){
+    const i=bestAlly(p,mySlot);
+    if(i<0){ say('sys','No other character to cover.'); return; }
+    p.shelf[i].covered=true;
+    say(p.isBot?'bot':'you',`${ch.name} covers ${p.shelf[i].name} — the next attack on it does nothing.`);
+  }
+  if(f==='shelter'){ p.shelter=true; say(p.isBot?'bot':'you',`${ch.name} shelters the shelf — 1 less damage per attack until your next turn.`); }
+  if(f==='bearWeight'){ p.shelf.forEach((c,i)=>{ if(c&&i!==mySlot) c.covered=true; }); say(p.isBot?'bot':'you',`${ch.name} bears the weight for the whole shelf.`); }
+  if(f==='seal'){ ch.sealed=true; say(p.isBot?'bot':'you',`${ch.name} seals itself — you choose what gets destroyed on it.`); }
+  // The bot's version of "put a material on". The human is asked instead — see askPut.
+  if(f==='putOnSelf'||f==='putOnAlly'){
+    for(let k=0;k<(mv.put||1);k++){
+      const m=handMats(p).find(x=>!mv.only||x.c.mat===mv.only);
+      const target=(f==='putOnSelf'?[ch]:p.shelf.filter(Boolean))
+        .filter(c=>p.shelf.includes(c)&&roomOn(c))
+        .sort((a,b)=>b.stack.length-a.stack.length)[0];
+      if(!m||!target){ say('sys','No material in hand to add.'); break; }
+      const ty=m.c.mat; p.hand.splice(m.i,1); target.stack.push({t:ty,under:null});
+      say('sys',`${target.name} takes on a ${ty}.`);
+    }
+  }
+  if(f==='remould'){
+    const want=mostWanted(p) || C[ch.name].t;
+    const i=ch.stack.findIndex(s=>s.t!==C[ch.name].t && !s.under);
+    if(i>=0){ const was=ch.stack[i].t; ch.stack[i]={t:want,under:null}; say('sys',`${ch.name} remoulds a ${was} into a ${want}.`); }
+    else say('sys','Nothing worth remoulding.');
+  }
+}
+
+function applyFx(p,ch,mv,defP,slot,broke){
+  const f=mv.fx;
+  if(f==='extraMove'){ G.moves++; say('sys',`${ch.name} buys an extra move.`); }
+  if(f==='killTool' && defP && defP.shelf[slot] && defP.shelf[slot].tool){
+    defP.discard.push(defP.shelf[slot].tool);
+    say('sys',`${defP.shelf[slot].tool} is destroyed.`);
+    defP.shelf[slot].tool=null;
+  }
+  if(f==='copyMove'){
+    const other=p.shelf.find(c=>c&&c!==ch);
+    if(other){ const m2=C[other.name].m.find(x=>moveLive(other,x)&&x.d>0);
+      if(m2) say('sys',`${ch.name} copies ${other.name}'s ${m2.n}.`); }
+  }
+  // Putting a material on is a choice — which material, onto whom — so the human is
+  // asked once the move has finished resolving. The bot just does it.
+  if((f==='putOnSelf'||f==='putOnAlly') && !p.isBot)
+    G.putAsk={self:f==='putOnSelf'?p.shelf.indexOf(ch):null, only:mv.only||null, left:mv.put||1, who:mv.n};
+  else if(f==='putOnSelf'||f==='putOnAlly'||f==='remould'||f==='cover'||f==='shelter'||f==='bearWeight'||f==='seal')
+    applyOwnSide(p,ch,mv,p.shelf.indexOf(ch));
+  if(f==='draw1') drawMain(p);
+  if(f==='draw2'){ drawMain(p); drawMain(p); }
+  if(f==='drawIfBreak'&&broke) drawMain(p);
+  if(f==='drawIfLastOwn'&&G.strippedOwn){ drawMain(p); say('sys',`${mv.n} took their last own-type material: draw a card.`); }
+  if(f==='smother'&&defP.shelf[slot]) defP.shelf[slot].smothered=true;
+  if(f==='mark'&&defP.shelf[slot]) defP.shelf[slot].marked=true;
+  if(f==='peek'&&p.prize.length) say('sys',`Top prize is ${p.prize[p.prize.length-1]}.`);
+  if(f==='layer'){
+    const i=p.hand.findIndex(c=>c.mat==='cloth');
+    if(i>=0&&ch.stack&&roomOn(ch)){ p.hand.splice(i,1); ch.stack.push({t:'cloth',under:null}); say('sys',`${ch.name} layers on a Cloth.`); }
+  }
+  if(f==='mend'){
+    const i=handMats(p)[0];
+    if(i){ const t=i.c.mat; p.hand.splice(i.i,1);
+      const target=p.shelf.filter(Boolean).sort((a,b)=>a.stack.length-b.stack.length)[0];
+      if(target&&roomOn(target)){ target.stack.push({t,under:null}); say('sys',`Mend adds ${t} to ${target.name}.`); } }
+  }
+  if(f==='extraPrize'&&broke) takePrizes(p,1);
+  // Patch underneath — draw when this character breaks an enemy
+  if(broke && ch.stack.some(s=>s.under==='Patch')) { drawMain(p); say('sys','Patch underneath: draw a card.'); }
+}
+
+function thornsCheck(defP,slot,attP,attSlot){
+  const ch=defP.shelf[slot];
+  if(ch && ch.stack.some(s=>s.under==='Shard')) return true;
+  return false;
+}
+
+/* ============================ RESOLVE AN ATTACK ============================ */
+/* What a move deals right now. Two cards print a number that depends on the board. */
+function moveDmg(p,ch,mv,tg){
+  // Moves that read the stack. `ch` is the attacker as it stands once any burn is paid.
+  const c=(mv.calc||'').split(':'), n=counts(ch.stack);
+  if(c[0]==='perOwn') return n[c[1]]||0;
+  if(c[0]==='big')    return (n[c[1]]||0)>=+c[2] ? +c[3] : mv.d;
+  if(c[0]==='low')    return ch.stack.length<=+c[1] ? +c[2] : mv.d;
+  if(c[0]==='bigger') return tg && tg.stack.length>ch.stack.length ? +c[1] : mv.d;
+  if(mv.fx==='perAlly') return Math.max(1,p.shelf.filter(c=>c&&c!==ch).length);
+  if(mv.fx==='pristine'){
+    const need=Object.values(C[ch.name].r).reduce((a,b)=>a+b,0);
+    return ch.stack.length>=need ? 2 : mv.d;
+  }
+  return mv.d;
+}
+
+/* One hit on one target, picked automatically. Returns whether the target broke. */
+function strike(p,mySlot,mv,defP,targetSlot){
+  const t=defP.shelf[targetSlot]; if(!t) return false;
+  if(mv.fx!=='pierce' && immuneTo(t)===mv.t){ say('sys',`${t.name} shrugs off ${mv.t} — no damage.`); return false; }
+  if(t.thimble){ t.thimble=false; say('sys',`Thimble blocks it.`); return false; }
+  if(mv.fx==='toolFirst' && t.tool){ defP.discard.push(t.tool); say(p.isBot?'bot':'you',`Dent destroys ${t.tool}.`); t.tool=null; return false; }
+  const n=Math.min(incoming(defP,t,mv.d),t.stack.length);
+  if(n<=0) return false;
+  const hadThorns = t.stack.some(s=>s.under==='Shard');
+  destroyMaterials(defP,targetSlot,autoPick(t,n, t.tool==='Lacquer'||t.sealed));
+  const broke=checkBreak(p,defP,targetSlot);
+  if(broke && hadThorns) applyThorns(defP,p,mySlot);
+  return broke;
+}
+function resolveAttack(p,mySlot,mv,defP,targetSlot,onNeedPicks){
+  const ch=p.shelf[mySlot];
+  if(!defP.shelf[targetSlot]) return;
+  payBurn(p,ch,mv);                                    // the cost comes first
+  const at=t=>({...mv,d:moveDmg(p,ch,mv,defP.shelf[t])});
+  let broke=strike(p,mySlot,at(targetSlot),defP,targetSlot);
+  const others=[0,1,2].filter(i=>i!==targetSlot&&defP.shelf[i]);
+  // "to two different characters": a second hit, unless Sentry Bell forbids any other target
+  if(mv.fx==='two' && !over && p.shelf[mySlot]===ch && mustTarget(defP)===null){
+    const second=others.find(i=>immuneTo(defP.shelf[i])!==mv.t);
+    if(second!==undefined) broke=strike(p,mySlot,at(second),defP,second)||broke;
+  }
+  if(mv.fx==='all') others.forEach(i=>{
+    if(!over && defP.shelf[i]) broke=strike(p,mySlot,at(i),defP,i)||broke; });
+  finishMove(p,ch,mv,defP,targetSlot,broke);
+}
+function applyThorns(defP,attP,attSlot){
+  const a=attP.shelf[attSlot]; if(!a) return;
+  const idxs=autoPick(a,1,true); destroyMaterials(attP,attSlot,idxs);
+  say('sys','Shard underneath: 1 damage back to the attacker.');
+  checkBreak(defP,attP,attSlot);
+}
+/* defender-favouring pick when Lacquer, attacker-favouring otherwise */
+function autoPick(ch,n,defenderChooses){
+  const own=C[ch.name].t;
+  const score=(m,i)=>{
+    let s=0;
+    if(m.t===own) s+=3;                                   // own type = immunity + signature move
+    if(C[ch.name].m.some(mv=>mv.t===m.t)) s+=2;           // powers a move
+    if(m.under) s+=1;
+    return s;
+  };
+  const order=ch.stack.map((m,i)=>({i,s:score(m,i)}))
+    .sort((a,b)=> defenderChooses ? a.s-b.s : b.s-a.s);
+  return order.slice(0,n).map(o=>o.i);
+}
+
+function finishMove(p,ch,mv,defP,slot,broke){
+  if(!mv.burn) p.frees=(p.frees||0)+1;
+  applyFx(p,ch,mv,defP,slot,broke);
+  ch.used=true; G.moves--;
+  sel=null;pend=null;
+  G.strippedOwn=false;
+  if(ch.stack.length===0) checkBreak(opp(p),p,p.shelf.indexOf(ch));
+  if(G.putAsk){ const a=G.putAsk; G.putAsk=null; if(!over) askPut(a); }
+  render();
+}
+
+/* ---- the human's "put a material on" choice --------------------------------
+   Used by Layer, Set, Glaze, Stuff, Stoke, Assemble, Mend, Take Root and Glue Pot.
+   a = {self: slot or null, only: type or null, left: how many, who: what is asking}  */
+function putTypes(a){
+  const have={}; handMats(G.you).forEach(x=>{ if(!a.only||x.c.mat===a.only) have[x.c.mat]=(have[x.c.mat]||0)+1; });
+  return have;
+}
+function putSlots(a){
+  return [0,1,2].filter(i=>G.you.shelf[i] && roomOn(G.you.shelf[i]) && (a.self===null||a.self===i));
+}
+function askPut(a){
+  if(!Object.keys(putTypes(a)).length){ say('sys',`${a.who}: no ${a.only||'material'} in hand to add.`); return false; }
+  if(!putSlots(a).length){ say('sys',`${a.who}: no character has room for another material.`); return false; }
+  pend={stage:'put',self:a.self,only:a.only,left:a.left,who:a.who,mat:null};
+  return true;
+}
+function putPick(type){
+  pend.mat=type;
+  const slots=putSlots(pend);
+  if(slots.length===1) return putTo(slots[0]);
+  render();
+}
+function putTo(slot){
+  const you=G.you, ch=you.shelf[slot];
+  const idx=you.hand.findIndex(c=>c.mat===pend.mat);
+  if(ch&&idx>=0&&roomOn(ch)){
+    you.hand.splice(idx,1); ch.stack.push({t:pend.mat,under:null});
+    say('you',`${pend.who} puts a ${pend.mat} on ${ch.name}.`);
+    pend.left--;
+  }
+  const again=pend.left>0 && Object.keys(putTypes(pend)).length && putSlots(pend).length;
+  if(again) pend.mat=null; else pend=null;
+  render();
+}
+
+/* ============================ BOT ============================ */
+/* Kept out of botTurn so the headless harnesses can drive it, exactly like botMelt.
+   While it lived inline, no simulation ever exercised the bot's free scrap. */
+/* Slim rules: the bot scraps when it has room on the shelf and nothing it can pay for,
+   naming whichever material would let it build. */
+function botScrapSlim(p){
+  if(p.scrapUsed || p.shelf.indexOf(null)<0) return;
+  const chars=p.hand.filter(c=>isChar(c));
+  const buildable=h=>h.some(c=>isChar(c)&&!C[c].prize&&canPay({hand:h},C[c].r));
+  if(buildable(p.hand) || chars.length<2) return;
+  const size=c=>Object.values(C[c].r).reduce((a,b)=>a+b,0);
+  // give up a prize it cannot grow first, then a spare copy, then the most expensive card
+  const order=chars.slice().sort((a,b)=>
+    (C[b].prize?1:0)-(C[a].prize?1:0) || chars.filter(x=>x===b).length-chars.filter(x=>x===a).length || size(b)-size(a));
+  for(const n of order){
+    const rest=p.hand.slice(); rest.splice(rest.indexOf(n),1);
+    const y=C[n].prize?2:1;
+    const ty=Object.keys(DECKS[p.key].mats).find(t=>buildable(rest.concat(Array(y).fill({mat:t}))));
+    if(!ty) continue;
+    p.hand.splice(p.hand.indexOf(n),1); for(let k=0;k<y;k++) p.hand.push({mat:ty});
+    p.discard.push(n); p.scrapUsed=true;
+    say('bot',`Bot scraps ${n} for ${y===2?'two '+ty+'s':'a '+ty}.`);
+    return;
+  }
+}
+function botScrap(p){
+  if(SLIM) return botScrapSlim(p);
+  // scrap if starved
+  if(!p.scrapUsed){
+    const wantBuild=p.hand.some(c=>isChar(c)&&!canPay(p,C[c].r));
+    if(wantBuild && handMats(p).length<3){
+      // A prize whose base is neither on the shelf nor in hand can't be grown right now —
+      // it's worth more as the two materials it comes apart into.
+      const stranded=p.hand.findIndex(c=>isChar(c)&&C[c].prize&&
+        !p.shelf.some(s=>s&&s.name===C[c].growFrom) && !p.hand.includes(C[c].growFrom));
+      const idx=p.hand.findIndex(c=>isChar(c)&&C[c].t===p.focus&&p.hand.filter(x=>x===c).length>1);
+      const j = stranded>=0?stranded:(idx>=0?idx:p.hand.findIndex(c=>isChar(c)&&!C[c].prize));
+      if(j>=0){ const n=p.hand.splice(j,1)[0]; const y=C[n].prize?2:1;
+        for(let k=0;k<y;k++) p.hand.push({mat:C[n].t});
+        p.discard.push(n); p.scrapUsed=true;
+        say('bot',`Bot scraps ${n} for ${y===2?'two '+C[n].t+'s':'a '+C[n].t}.`); }
+    }
+  }
+}
+
+/* ---- the scrap pile ---- */
+function salvage(p,type){
+  const i=p.scrap.indexOf(type); if(i<0) return false;
+  p.scrap.splice(i,1); p.hand.push({mat:type}); p.salvUsed=true; return true;
+}
+function botSalvage(p){
+  if(SLIM||!SCRAP_RULE||p.salvUsed||!p.scrap.length) return;
+  const w=mostWanted(p);
+  const ty=(w&&p.scrap.includes(w))?w:(p.scrap.includes(p.focus)?p.focus:p.scrap[0]);
+  salvage(p,ty); say('bot',`Bot salvages a ${ty} from its scrap pile.`);
+}
+/* Every attack the bot could make right now, scored. A burn has to earn its cost. */
+function botAttacks(p,e){
+  const out=[];
+  for(let s=0;s<3;s++){
+    const ch=p.shelf[s]; if(!ch||ch.used||ch.fresh) continue;
+    for(const mv of C[ch.name].m){
+      if(!moveLive(ch,mv) || (mv.d===0&&!mv.calc)) continue;
+      const after=afterBurn(ch,mv);
+      const burnN=mv.burn?Object.values(mv.burn).reduce((a,b)=>a+b,0):0;
+      for(let t=0;t<3;t++){
+        const tg=e.shelf[t]; if(!tg) continue;
+        if(mustTarget(e)!==null && mustTarget(e)!==t) continue;
+        if(immuneTo(tg)===mv.t && mv.fx!=='pierce') continue;
+        let d=moveDmg(p,after,mv,tg);
+        if(tg.marked&&d>0) d++;
+        if(tg.thimble||tg.covered) d=0;
+        const landed=Math.min(d,tg.stack.length), kills=landed>0&&landed>=tg.stack.length;
+        let val=landed + (kills ? 2+2*C[tg.name].brk : 0);
+        const extra=e.shelf.filter((x,i)=>x&&i!==t).length;
+        if(mv.fx==='two') val+=Math.min(1,extra)*Math.min(d,2)*0.8;
+        if(mv.fx==='all') val+=extra*Math.min(d,2)*0.8;
+        if(mv.fx==='mark'&&G.moves>=2) val+=0.6;
+        if(mv.fx==='draw1'||mv.fx==='draw2') val+=0.3;
+        val-=burnN*0.9;
+        if(after.stack.length===0) val-=(kills?0:5)+1.5*C[ch.name].brk;   // burning yourself out
+        out.push({val,s,mv,t,kills});
+      }
+    }
+  }
+  return out.sort((a,b)=>b.val-a.val);
+}
+
+function botTurn(){
+  if(over) return;
+  const p=G.bot, e=G.you;
+  botSalvage(p);
+  botScrap(p);
+  botMelt(p);
+  let guard=0;
+  while(G.moves>0 && !over && guard++<12){
+    if(botAct(p,e)) { render(); } else break;
+  }
+  if(!over){ render(); setTimeout(()=>{ if(!over) endTurn(); },380); }
+}
+
+function botAct(p,e){
+  // 1. a break is on offer — take the best one
+  const kill=botAttacks(p,e).find(o=>o.kills&&o.val>0);
+  if(kill){ resolveAttack(p,kill.s,kill.mv,e,kill.t,()=>{}); return true; }
+  // 2. build if room
+  const emptySlot=p.shelf.indexOf(null);
+  if(emptySlot>=0){
+    const size=c=>Object.values(C[c].r).reduce((x,y)=>x+y,0);
+    const onShelf=p.shelf.filter(Boolean).length;
+    const opts=p.hand.map((c,i)=>({c,i})).filter(x=>isChar(x.c)&&!C[x.c].prize&&canPay(p,C[x.c].r))
+      // develop the board first, get greedy once it's established
+      .sort((a,b)=> onShelf<2 ? size(a.c)-size(b.c) : size(b.c)-size(a.c));
+    if(opts.length){ buildChar(p,opts[0].i,emptySlot); G.moves--; return true; }
+  }
+  // 3. grow
+  for(let s=0;s<3;s++){
+    const b=p.shelf[s]; if(!b||b.fresh) continue;
+    const pz=p.hand.findIndex(c=>isChar(c)&&C[c].prize&&canGrowOnto(c,b,p));
+    const gi=pz>=0?pz:p.hand.findIndex(c=>isChar(c)&&canGrowOnto(c,b,p));
+    if(gi>=0){ const st=b.stack.slice(); st.push({t:C[b.name].t,under:b.name});
+      if(canPay(p,C[p.hand[gi]].r,counts(st))){ growChar(p,gi,s); G.moves--; return true; } }
+  }
+  // 3b. protect or repair the board when there is something to protect and something to fear
+  if(p.shelf.filter(Boolean).length>=2 && e.shelf.filter(Boolean).length>=2 && G.moves>=2){
+    for(let s=0;s<3;s++){
+      const ch=p.shelf[s]; if(!ch||ch.used||ch.fresh) continue;
+      // only the moves that print no damage — the rest protect as a rider on an attack
+      const mv=C[ch.name].m.find(m=>m.d===0&&!m.calc&&OWN_SIDE.has(m.fx)&&moveLive(ch,m));
+      if(!mv || (mv.fx==='cover' && bestAlly(p,s)<0)) continue;
+      if(mv.fx==='putOnAlly' && !(handMats(p).length && p.shelf.some(c=>c&&c!==ch&&roomOn(c)))) continue;
+      payBurn(p,ch,mv); applyOwnSide(p,ch,mv,s);
+      ch.used=true; G.moves--; return true;
+    }
+  }
+  // 4. best attack on offer
+  const best=botAttacks(p,e)[0];
+  if(best&&best.val>0){ resolveAttack(p,best.s,best.mv,e,best.t,()=>{}); return true; }
+
+  // 5. play an item
+  const ii=p.hand.findIndex(c=>ITEM[c]);
+  if(ii>=0){
+    const name=p.hand[ii];
+    if(ITEM[name].tool){
+      const tgt=p.shelf.findIndex(ch=>ch&&!ch.tool);
+      if(tgt>=0){ p.hand.splice(ii,1); p.shelf[tgt].tool=name; if(name==='Thimble')p.shelf[tgt].thimble=true;
+        p.items++; G.moves--; say('bot',`Bot attaches ${name} to ${p.shelf[tgt].name}.`); return true; }
+    } else if(name==='Rummage'){
+      p.hand.splice(ii,1); drawMain(p); drawMain(p); p.discard.push(name); p.items++; G.moves--;
+      say('bot','Bot plays Rummage.'); return true;
+    } else if(name==='Beach Ball'){
+      p.hand.splice(ii,1); p.discard.push(name);
+      // whichever type it is shortest of, among the ones its cards actually want
+      const want={}; p.hand.forEach(c2=>{ if(isChar(c2)) for(const ty in C[c2].r) want[ty]=(want[ty]||0)+C[c2].r[ty]; });
+      const held=t2=>p.hand.filter(x=>x.mat===t2).length;
+      const ty=Object.keys(want).sort((x,y)=>(want[y]-held(y))-(want[x]-held(x)))[0]||p.focus;
+      const got=pullMats(p,ty,3); p.items++; G.moves--;
+      say('bot',`Bot plays Beach Ball for ${got} ${ty}${got===1?'':'s'}.`); return true;
+    } else if(name==='Bubble'){
+      p.hand.splice(ii,1); p.discard.push(name); p.anyGrow=true; p.items++; G.moves--;
+      say('bot','Bot plays Bubble.'); return true;
+    } else if(name==='Ambush'){
+      p.hand.splice(ii,1); p.discard.push(name); p.growFresh=true; p.items++; G.moves--;
+      say('bot','Bot plays Ambush.'); return true;
+    } else if(name==='Dust Mite'){
+      if(!p.deck.length) return false;
+      p.hand.splice(ii,1); p.discard.push(name);
+      const look=p.deck.splice(0,5);
+      // prefer a prize base it is missing, then any character, then anything
+      let k=look.findIndex(c2=>p.hand.some(h=>isChar(h)&&C[h].prize&&C[h].growFrom===c2));
+      if(k<0) k=look.findIndex(c2=>isChar(c2));
+      if(k<0) k=0;
+      p.hand.push(look[k]); look.filter((_,j)=>j!==k).forEach(c2=>p.deck.push(c2));
+      p.deck=shuffle(p.deck); p.items++; G.moves--;
+      say('bot','Bot plays Dust Mite.'); return true;
+    } else if(name==='Lock'){
+      let k=p.discard.findIndex(c2=>p.hand.some(h=>isChar(h)&&C[h].prize&&C[h].growFrom===c2));
+      if(k<0) k=p.discard.findIndex(c2=>isChar(c2));
+      if(k<0) return false;
+      p.hand.splice(ii,1); p.discard.push(name);
+      const back=p.discard.splice(k,1)[0]; p.hand.push(back);
+      p.items++; G.moves--; say('bot',`Bot plays Lock, taking back ${back}.`); return true;
+    }
+  }
+  return false;
+}
+function mustTarget(e){ const i=e.shelf.findIndex(ch=>ch&&ch.tool==='Sentry Bell'); return i>=0?i:null; }
+
+
+/* ============================ RENDER ============================ */
+/* ---------- art pipeline ----------
+   Drop images into an `art/` folder next to this file, named after the card in
+   lowercase with hyphens: Mitten -> art/mitten.png, "Star Pattern" ->
+   art/star-pattern.png. Materials use art/material-cloth.png and so on.
+   Anything missing falls back to a tinted placeholder, so partial art is fine.
+   The Art panel in the sidebar lists exactly which filenames are wanted.     */
+const ART_DIR='art/', ART_EXT='.png';
+const ART_MISSING=new Set();
+const slug=n=>String(n).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+
+/* ART_MAP:START — generated by map-art.js. Edit any line to reassign a picture;
+   re-running the script keeps whatever you've changed and only fills the gaps. */
+const ART_MAP = {
+  "Ambush": "art/item-ambush.png",
+  "Arcade": "art/tin-evolve1.png",
+  "Armature": "art/item-armature.png",
+  "Beach Ball": "art/item-beach_ball.png",
+  "Bead Beast": "art/plastic1.png",
+  "Bubble": "art/item-bubble.png",
+  "Busy Bot": "art/tin-evolve3.png",
+  "Button": "art/plastic-baby.png",
+  "Cotton Dragon": "art/cloth2.png",
+  "Crackle": "art/clay-evolve2.png",
+  "Crowned Prince": "art/tin-prize1.png",
+  "Cuppy": "art/clay-baby.png",
+  "Danbur": "art/glass1.png",
+  "Decal": "art/plastic-evolve1.png",
+  "Delicate Segments": "art/wood-prize1.png",
+  "Dust Mite": "art/item-dust_mite.png",
+  "Ferro": "art/tin-baby2.png",
+  "Fractured Fox": "art/glass-evolve3.png",
+  "Garden Fey": "art/wood1.png",
+  "Gilded Dog": "art/clay-prize.png",
+  "Glass Eye": "art/item-glass_eye.png",
+  "Glimmer": "art/clay-evolve3.png",
+  "Glob": "art/clay-baby2.png",
+  "Glue Pot": "art/item_snack_break.png",
+  "Hand-Me-Down": "art/cloth-prize1.png",
+  "Hay Weave": "art/wood-evolve3.png",
+  "Heartwood": "art/wood-prize2.png",
+  "Hot Cup": "art/clay-evolve1.png",
+  "Ink-Stained": "art/wood2.png",
+  "Jelly": "art/glass-baby2.png",
+  "Lacquer": "art/item-laquer.png",
+  "Laika": "art/glass-prize1.png",
+  "Lantern": "art/glass2.png",
+  "Lavender Glass": "art/glass-evolve1.png",
+  "Lock": "art/item-lock.png",
+  "Mittens": "art/cloth-evolve1.png",
+  "Music Box": "art/item-music_box.png",
+  "Offshoot": "art/plastic-evolve2.png",
+  "Patch": "art/cloth-baby.png",
+  "Patch Kit": "art/item-patch_kit.png",
+  "Plugs": "art/plastic-baby2.png",
+  "Pool Toy": "art/plastic-prize2.png",
+  "Prism": "art/glass-evolve2.png",
+  "Raggedy Angel": "art/cloth-evolve3.png",
+  "Raku": "art/clay1.png",
+  "Rose Thorns": "art/wood-evolve1.png",
+  "Rummage": "art/item-rummage.png",
+  "Rune-Dog": "art/clay2.png",
+  "Sapling": "art/wood-baby.png",
+  "Second Thoughts": "art/item-rethink.png",
+  "Sentry Bell": "art/item-sentry_bell.png",
+  "Sequin": "art/item-sequin.png",
+  "Sewing Kit": "art/item-sewing_kit.png",
+  "Shard": "art/glass-baby.png",
+  "Sleepover": "art/cloth1.png",
+  "Slipglaze": "art/clay-prize2.png",
+  "Snipped Threads": "art/item-cut_loose.png",
+  "Snippy": "art/tin-baby.png",
+  "Socky": "art/cloth-baby2.png",
+  "Spare Button": "art/item-spare_button.png",
+  "Splinter": "art/wood-evolve2.png",
+  "Springy": "art/tin2.png",
+  "Starry Glider": "art/plastic-evolve3.png",
+  "Starry Pattern": "art/cloth-evolve2.png",
+  "Test Dummy": "art/tin-evolve2.png",
+  "The Last Bauble": "art/glass-prize2.png",
+  "The Long Wind": "art/tin-prize2.png",
+  "Thimble": "art/item-thimble.png",
+  "Tin Key": "art/item-keywind.png",
+  "Tin Toy": "art/tin1.png",
+  "Toy TV": "art/plastic-prize1.png",
+  "Unpicker": "art/item-untangle.png",
+  "Vinyl Twins": "art/plastic2.png",
+  "Whittle": "art/wood-baby2.png",
+  "Zipper": "art/cloth-prize2.png"
+};
+const ART_FRAME = {
+  "cloth": "art/fabric_card_blank.png",
+  "wood": "art/wood_card_blank.png",
+  "clay": "art/clay_card_blank.png",
+  "tin": "art/tin_card_blank.png",
+  "glass": "art/glass_card_blank.png",
+  "plastic": "art/plastic_card_blank.png",
+  "item": "art/item_card_blank.png"
+};
+const ART_MATERIAL = {
+  "cloth": "art/material_fabric.png",
+  "wood": "art/material_wood.png",
+  "clay": "art/material_clay.png",
+  "tin": "art/material_tin.png",
+  "glass": "art/material_glass.png",
+  "plastic": "art/material_plastic.png"
+};
+/* the window the art sits in, as fractions of the frame */
+const ART_WINDOW = { x:0.050, y:0.140, w:0.900, h:0.371 };
+/* ART_MAP:END */
+
+const encPath=p=>''+p.split('/').map(encodeURIComponent).join('/');
+const artPath=n=> ART_MAP[n] ? encPath(ART_MAP[n]) : ART_DIR+slug(n)+ART_EXT;
+
+function artInto(box,name,tint,label){
+  box.classList.add('bg-'+tint);
+  const key=slug(name);
+  if(ART_MISSING.has(key)){
+    const ph=document.createElement('div'); ph.className='ph'; ph.textContent=label||name;
+    box.appendChild(ph); return box;
+  }
+  const img=document.createElement('img');
+  img.alt=''; img.loading='lazy';
+  img.onerror=()=>{ ART_MISSING.add(key); img.remove();
+    const ph=document.createElement('div'); ph.className='ph'; ph.textContent=label||name; box.appendChild(ph); };
+  img.src=artPath(name);
+  box.appendChild(img);
+  return box;
+}
+
+/* Build a real card face: frame image, art behind its window, text on top.
+   `onMove` gets (moveIndex) when a live move row is clicked; omit for hand cards. */
+function cardFace(name, {live=null, onMove=null, stack=null, extraTag=null}={}){
+  const def=C[name], isItem=!def;
+  const cf=document.createElement('div');
+  cf.className='cf'+(isItem?' item':'');
+
+  const artFile=ART_MAP[name];
+  if(artFile && !ART_MISSING.has(name)){
+    const img=document.createElement('img'); img.className='cf-art'; img.alt='';
+    img.onerror=()=>{ ART_MISSING.add(name); render(); };
+    img.src=encPath(artFile); cf.appendChild(img);
+  } else {
+    const ph=document.createElement('div');
+    ph.className='cf-noart bg-'+(def?def.t:'neutral'); ph.textContent='art wanted';
+    cf.appendChild(ph);
+  }
+
+  const frameFile = isItem ? ART_FRAME.item : ART_FRAME[def.t];
+  if(frameFile){
+    const fr=document.createElement('img'); fr.className='cf-frame'; fr.alt='';
+    fr.src=encPath(frameFile); cf.appendChild(fr);
+  }
+
+  const nm=document.createElement('div'); nm.className='cf-name';
+  nm.textContent=name;
+  if(def&&def.seed){ const s=document.createElement('span'); s.className='cf-seed'; s.textContent='[seed]'; nm.appendChild(s); }
+  cf.appendChild(nm);
+
+  const cn=document.createElement('div'); cn.className='cf-corner';
+  cn.textContent = isItem ? (ITEM[name].tool?'T':'N') : def.brk;
+  cn.title = isItem ? (ITEM[name].tool?'Tool':'Notion') : 'break value';
+  cf.appendChild(cn);
+
+  const tx=document.createElement('div'); tx.className='cf-text';
+  if(isItem){
+    const r=document.createElement('div'); r.className='cf-recipe'; r.textContent='Costs '+ITEM[name].cost;
+    tx.appendChild(r);
+    const e=document.createElement('div'); e.className='cf-mvt'; e.style.fontSize='5.4cqw';
+    e.textContent=ITEM[name].text; tx.appendChild(e);
+  } else {
+    const r=document.createElement('div'); r.className='cf-recipe';
+    r.textContent=Object.entries(def.r).map(([t,n])=>`${n} ${t}`).join(' · ');
+    tx.appendChild(r);
+    // How this card reaches the table. A prize is unplayable without its named base,
+    // so the player has to be able to read that off the card itself.
+    const growTxt = def.growFrom ? (SLIM ? 'Grows from any '+def.t+' character' : 'Grows from '+def.growFrom)
+                  : def.grow     ? 'Grows from any '+def.grow+' seed' : null;
+    if(growTxt){ const g=document.createElement('div'); g.className='cf-grow';
+      g.textContent=growTxt; tx.appendChild(g); }
+    def.m.forEach((mv,mi)=>{
+      const usable = live && live(mv);
+      const row=document.createElement('div');
+      row.className='cf-mv'+(usable?' live':(stack?' dead':''));
+      const h=document.createElement('div'); h.className='cf-mvh';
+      const shown = stack ? moveDmg(null,afterBurn(stack,mv),mv,null) : (mv.calc&&mv.calc.startsWith('perOwn') ? '×' : mv.d);
+      h.innerHTML=`<span>${mv.n}</span><span class="cf-tag bg-${mv.t}">${mv.burn?'burn ':''}${mv.t}</span>`
+                + `<span class="cf-dmg">${shown}</span>`;
+      row.appendChild(h);
+      const t2=document.createElement('div'); t2.className='cf-mvt'; t2.textContent=mvText(mv);
+      if(stack && !usable){ const w=document.createElement('span'); w.className='mvwhy';
+        w.textContent=' — '+deadReason(stack,mv); t2.appendChild(w); }
+      row.appendChild(t2);
+      if(usable && onMove) row.onclick=ev=>{ ev.stopPropagation(); onMove(mi); };
+      tx.appendChild(row);
+    });
+    if(def.underTxt){ const u=document.createElement('div'); u.className='cf-under';
+      u.textContent='Underneath: '+def.underTxt; tx.appendChild(u); }
+  }
+  cf.appendChild(tx);
+
+  const ft=document.createElement('div'); ft.className='cf-foot';
+  if(isItem){ ft.innerHTML=`<span>${ITEM[name].tool?'attaches · one per character':'played and discarded'}</span>`; }
+  else {
+    const bits=[];
+    if(def.seed) bits.push('seed');
+    if(def.grow) bits.push('grows from any '+def.grow+' seed');
+    if(def.prize) bits.push('★ prize');
+    ft.innerHTML=`<span>shrugs ${SHRUGS[def.t]}</span><span>${extraTag||bits.join(' · ')}</span>`;
+  }
+  cf.appendChild(ft);
+  return cf;
+}
+
+/* A finished material card, used whole in hand. */
+function materialFace(type){
+  const cf=document.createElement('div'); cf.className='cf';
+  const src=ART_MATERIAL[type];
+  if(src){
+    const img=document.createElement('img'); img.className='cf-frame'; img.alt='';
+    img.src=encPath(src); cf.appendChild(img);
+    const lb=document.createElement('div'); lb.className='cf-matname'; lb.textContent=type;
+    cf.appendChild(lb);
+  } else {
+    const ph=document.createElement('div'); ph.className='cf-frame bg-'+type;
+    ph.style.display='grid'; ph.style.placeItems='center';
+    ph.style.font='700 7cqw/1 inherit'; ph.style.textTransform='uppercase';
+    ph.style.letterSpacing='.14em'; ph.style.color='rgba(0,0,0,.6)';
+    ph.textContent=type; cf.appendChild(ph);
+  }
+  return cf;
+}
+
+/* The same card, tucked under a character so only its top edge shows. */
+function matEl(m,cls,onclick){
+  const d=document.createElement('div');
+  d.className='mat bg-'+m.t+(m.under?' under':'')+(cls||'');
+  const src=ART_MATERIAL[m.t];
+  if(src){ const img=document.createElement('img'); img.alt=''; img.src=encPath(src); d.appendChild(img); }
+  const lab=document.createElement('span'); lab.textContent=ABBR[m.t]; d.appendChild(lab);
+  d.title=m.under?('underneath: '+m.under+' (counts as '+m.t+')'):m.t;
+  if(onclick){d.onclick=onclick;}
+  return d;
+}
+
+function chEl(p,slot,isYou){
+  const ch=p.shelf[slot];
+  const d=document.createElement('div');
+  if(!ch){
+    d.className='ch empty'; d.textContent='empty';
+    if(isYou&&sel&&sel.k==='hand'&&isChar(G.you.hand[sel.i])&&!C[G.you.hand[sel.i]].prize&&canPay(G.you,C[G.you.hand[sel.i]].r)&&G.moves>0&&!over){
+      d.className='ch empty tgt'; d.textContent='build here';
+      d.onclick=()=>{ buildChar(G.you,sel.i,slot); G.moves--; sel=null; render(); };
+    }
+    return d; }
+  const def=C[ch.name];
+  d.className='ch'+(ch.used?' spent':'')+(sel&&sel.k==='shelf'&&sel.i===slot&&isYou?' sel':'');
+  // targeting highlight
+  if(pend&&pend.stage==='target'&&!isYou){
+    const mt=mustTarget(p);
+    if(mt===null||mt===slot){ d.className+=' tgt'; d.onclick=()=>chooseTarget(slot); }
+  }
+  if(pend&&pend.stage==='put'&&pend.mat&&isYou&&putSlots(pend).includes(slot)){ d.className+=' tgt'; d.onclick=()=>putTo(slot); }
+  if(pend&&pend.stage==='tool'&&isYou&&!ch.tool){ d.className+=' tgt'; d.onclick=()=>toolTo(slot); }
+  if(pend&&pend.stage==='scrap'&&isYou&&!SLIM){ d.className+=' tgt'; d.onclick=()=>scrapFromShelf(slot); }
+  if(isYou&&sel&&sel.k==='hand'&&isChar(G.you.hand[sel.i])&&canGrowOnto(G.you.hand[sel.i],ch,G.you)){
+    d.className+=' tgt'; d.onclick=()=>{ if(growChar(G.you,sel.i,slot)){G.moves--;} sel=null; render(); };
+  }
+
+  const canAct = isYou && !ch.used && !ch.fresh && G.moves>0 && !over && !pend;
+  d.appendChild(cardFace(ch.name,{
+    stack: ch,
+    live: mv => canAct && moveLive(ch,mv),
+    onMove: mi => startMove(slot,mi),
+    extraTag: [ch.tool?'⚙ '+ch.tool:null, ch.smothered?'smothered':null, ch.marked?'marked':null, ch.covered?'covered':null].filter(Boolean).join(' · ')||null,
+  }));
+
+  // The pickable stack is the DEFENDER's, at the targeted slot — not the attacker's.
+  // defIsYou is true only when the human is the one choosing on their own character.
+  const picking = pend && pend.stage==='destroy' && pend.defIsYou===isYou && pend.slot2===slot;
+  if(picking) d.className+=' tgt';
+  const st=document.createElement('div'); st.className='stack';
+  ch.stack.forEach((m,i)=>{
+    const taken = picking && pend.picks.includes(i);
+    st.appendChild(matEl(m, taken?' picked' : (picking?' pick':''), (picking&&!taken)?()=>pickMat(i):null));
+  });
+  if(!ch.stack.length){ const e=document.createElement('div'); e.className='stackempty'; e.textContent='nothing left'; st.appendChild(e); }
+
+  const wrap=document.createElement('div'); wrap.className='slot';
+  wrap.appendChild(d); wrap.appendChild(st);
+  return wrap;
+}
+
+function render(){
+  const you=G.you, bot=G.bot;
+  document.getElementById('botShelf').replaceChildren(...[0,1,2].map(i=>chEl(bot,i,false)));
+  document.getElementById('youShelf').replaceChildren(...[0,1,2].map(i=>chEl(you,i,true)));
+  document.getElementById('youCounts').textContent=
+    `main deck ${you.deck.length} · material deck ${you.matDeck.length} · prizes ${you.prize.length} · discard ${you.discard.length}` + scrapNote(you);
+  document.getElementById('botCounts').textContent=
+    `main deck ${bot.deck.length} · material deck ${bot.matDeck.length} · prizes ${bot.prize.length} · hand ${bot.hand.length}` + scrapNote(bot);
+
+  // Hand is sorted for reading, but each entry keeps its real index so clicks stay correct.
+  const RING=['cloth','wood','clay','tin','glass','plastic'];
+  const rank=c=> c.mat ? 300+RING.indexOf(c.mat)
+              : C[c] ? (C[c].prize?200:0)+Object.values(C[c].r).reduce((a,b)=>a+b,0)
+              : (ITEM[c].tool?100:150);
+  const view=you.hand.map((c,i)=>({c,i}))
+    .sort((a,b)=> rank(a.c)-rank(b.c) || String(a.c).localeCompare(String(b.c)));
+  const h=document.getElementById('hand'); h.replaceChildren();
+  view.forEach(({c,i})=>{
+    const d=document.createElement('div');
+    if(c.mat){
+      d.className='hc matcard'; d.replaceChildren(materialFace(c.mat));
+      if(pend&&pend.stage==='melt'){
+        d.className += pend.picks.includes(i) ? ' no' : ' tgt';
+        if(!pend.picks.includes(i)) d.onclick=()=>meltPick(i);
+      }
+    }
+    else if(C[c]){
+      const def=C[c], payable=canPay(you,def.r), ok=payable&&!def.prize;
+      d.className='hc'+(ok?'':' no')+(sel&&sel.k==='hand'&&sel.i===i?' sel':'');
+      d.replaceChildren(cardFace(c,{extraTag: def.prize ? (SLIM ? 'grow onto any '+def.t : 'grow onto '+def.growFrom)
+                                    : payable ? null : 'can’t pay yet'}));
+      if(pend&&pend.stage==='scrap') d.className+=' tgt';
+      d.onclick=()=>{ if(over) return;
+        if(pend&&pend.stage==='scrap'){ scrapFromHand(i); return; }
+        if(pend) return;
+        sel = (sel&&sel.k==='hand'&&sel.i===i)?null:{k:'hand',i}; render(); };
+    } else {
+      d.className='hc';
+      d.replaceChildren(cardFace(c));
+      d.onclick=()=>{ if(over) return;
+        if(pend&&pend.stage==='scrap'){ say('sys','Tools and Notions cannot be scrapped. Only characters.'); render(); return; }
+        if(pend) return; playItem(i); };
+    }
+    h.appendChild(d);
+  });
+
+  document.getElementById('sTurn').textContent=G.turn;
+  document.getElementById('sMoves').textContent=G.moves;
+  document.getElementById('sScrap').textContent=(you.scrapUsed?'scrap ':'')+(you.meltUsed?'melt':'')||'no';
+  const meltBtn=document.getElementById('btnMelt');
+  meltBtn.disabled = over||G.actor!=='you'||!!pend||you.meltUsed||handMats(you).length<2;
+  meltBtn.className = (pend&&pend.stage==='melt')?'go':'';
+  document.getElementById('sPrizeYou').textContent=you.prize.length;
+  document.getElementById('sPrizeBot').textContent=bot.prize.length;
+  document.getElementById('sFirstBuild').textContent=you.firstBuild??'—';
+  document.getElementById('sShelfFull').textContent=you.shelfFull??'—';
+  document.getElementById('sGrows').textContent=you.grows;
+  document.getElementById('sItems').textContent=you.items;
+  document.getElementById('turnInfo').textContent = over?'game over':(G.actor==='you'?`your turn · ${G.moves} moves${you.rush?' · rebuild turn':''}`:'bot thinking…');
+  if(TESTER){ ['slimWrap','scrapRuleWrap','artWrap','v2Wrap','immWrap'].forEach(id=>{ document.getElementById(id).style.display='none'; });
+    if(over && !G.asked){ G.asked=true; showFeedback(); } }
+  document.getElementById('btnEnd').disabled = over||G.actor!=='you'||(pend&&pend.stage==='draw');
+  document.getElementById('btnScrap').disabled = over||G.actor!=='you'||you.scrapUsed||!!pend;
+  const sv=document.getElementById('btnSalv');
+  sv.style.display = (SCRAP_RULE&&!SLIM) ? '' : 'none';
+  meltBtn.style.display = SLIM ? 'none' : '';
+  document.getElementById('scrapRuleWrap').style.display = SLIM ? 'none' : '';
+  document.getElementById('handNote').textContent = SLIM
+    ? '— slim rules: each turn you draw 1 card and 2 materials'
+    : '— each turn you draw 1 from your main deck, then 2 more from either deck, your choice';
+  sv.disabled = over||G.actor!=='you'||you.salvUsed||!!pend||!you.scrap.length;
+
+  const lg=document.getElementById('log'); lg.replaceChildren();
+  G.log.slice(0,80).forEach(l=>{const d=document.createElement('div');d.className=l.who;d.textContent=l.txt;lg.appendChild(d);});
+
+  const pr=document.getElementById('prompt');
+  pr.replaceChildren();
+  if(pend&&pend.stage==='draw'){
+    pr.className='prompt';
+    const t=document.createElement('span');
+    t.textContent=`Draw ${pend.left} more — take from either deck, in any mix. `;
+    pr.appendChild(t);
+    const mk=(label,n,fn)=>{
+      const b=document.createElement('button'); b.style.marginLeft='6px';
+      b.textContent=`${label} (${n})`; b.disabled=!n; b.onclick=fn; pr.appendChild(b);
+    };
+    mk('Main deck', you.deck.length, ()=>takeDraw('main'));
+    mk('Material deck', you.matDeck.length, ()=>takeDraw('mat'));
+  } else if(pend&&pend.stage==='beachball'){
+    pr.className='prompt';
+    const t=document.createElement('span'); t.textContent='Beach Ball — three materials of which type? '; pr.appendChild(t);
+    ['cloth','wood','clay','tin','glass','plastic'].forEach(ty=>{
+      const have=you.matDeck.filter(m=>m.mat===ty).length;
+      const b2=document.createElement('button'); b2.style.marginLeft='5px';
+      b2.textContent=`${ty} (${have})`; b2.disabled=!have; b2.onclick=()=>beachBallTo(ty); pr.appendChild(b2);
+    });
+  } else if(pend&&pend.stage==='dustmite'){
+    pr.className='prompt';
+    const t=document.createElement('span'); t.textContent='Dust Mite — take one, the rest are shuffled back. '; pr.appendChild(t);
+    pend.cards.forEach((c,k)=>{
+      const b2=document.createElement('button'); b2.style.marginLeft='5px';
+      b2.textContent=c.mat?c.mat:c; b2.onclick=()=>dustMiteTake(k); pr.appendChild(b2);
+    });
+  } else if(pend&&pend.stage==='lock'){
+    pr.className='prompt';
+    const t=document.createElement('span'); t.textContent='Lock — bring which character back? '; pr.appendChild(t);
+    you.discard.forEach((c,k)=>{
+      if(!isChar(c)) return;
+      const b2=document.createElement('button'); b2.style.marginLeft='5px';
+      b2.textContent=c; b2.onclick=()=>lockTake(k); pr.appendChild(b2);
+    });
+    const cx=document.createElement('button'); cx.className='warn'; cx.style.marginLeft='10px';
+    cx.textContent='Cancel'; cx.onclick=()=>{pend=null;render();}; pr.appendChild(cx);
+  } else if(pend&&pend.stage==='put'){
+    pr.className='prompt';
+    const t=document.createElement('span'); pr.appendChild(t);
+    if(!pend.mat){
+      t.textContent=`${pend.who} — put which material on${pend.left>1?' ('+pend.left+' to place)':''}? `;
+      const have=putTypes(pend);
+      Object.keys(have).forEach(ty=>{
+        const b2=document.createElement('button'); b2.style.marginLeft='5px';
+        b2.textContent=`${ty} (${have[ty]})`; b2.onclick=()=>putPick(ty); pr.appendChild(b2);
+      });
+    } else t.textContent=`${pend.who} — choose one of your characters to receive the ${pend.mat}.`;
+    const cx=document.createElement('button'); cx.className='warn'; cx.style.marginLeft='10px';
+    cx.textContent='Skip'; cx.onclick=()=>{pend=null;render();}; pr.appendChild(cx);
+  } else if(pend&&pend.stage==='scrapTo'){
+    pr.className='prompt';
+    const t=document.createElement('span'); t.textContent=`Scrap ${you.hand[pend.i]} into which material? `; pr.appendChild(t);
+    Object.keys(DECKS[you.key].mats).forEach(ty=>{
+      const b2=document.createElement('button'); b2.style.marginLeft='5px';
+      b2.textContent=ty; b2.onclick=()=>scrapInto(pend.i,ty); pr.appendChild(b2);
+    });
+    const cx=document.createElement('button'); cx.className='warn'; cx.style.marginLeft='10px';
+    cx.textContent='Cancel'; cx.onclick=()=>{pend=null;render();}; pr.appendChild(cx);
+  } else if(pend&&pend.stage==='salvage'){
+    pr.className='prompt';
+    const t=document.createElement('span'); t.textContent='Salvage — take which material back from your scrap pile? '; pr.appendChild(t);
+    const have={}; you.scrap.forEach(ty=>have[ty]=(have[ty]||0)+1);
+    Object.keys(have).forEach(ty=>{
+      const b2=document.createElement('button'); b2.style.marginLeft='5px';
+      b2.textContent=`${ty} (${have[ty]})`; b2.onclick=()=>{ salvage(you,ty); say('you',`You salvage a ${ty} from your scrap pile.`); pend=null; render(); };
+      pr.appendChild(b2);
+    });
+    const cx=document.createElement('button'); cx.className='warn'; cx.style.marginLeft='10px';
+    cx.textContent='Cancel'; cx.onclick=()=>{pend=null;render();}; pr.appendChild(cx);
+  } else if(pend&&pend.stage==='meltTo'){
+    pr.className='prompt';
+    const t=document.createElement('span'); t.textContent='Take one material of which type? '; pr.appendChild(t);
+    ['cloth','wood','clay','tin','glass','plastic'].forEach(ty=>{
+      const b=document.createElement('button'); b.style.marginLeft='5px';
+      b.textContent=ty; b.onclick=()=>meltTo(ty); pr.appendChild(b);
+    });
+  } else {
+    const msg =
+      !pend ? null :
+      pend.stage==='target'  ? 'Choose an enemy character to hit.' :
+      pend.stage==='destroy' ? `Choose ${pend.n} material${pend.n>1?'s':''} on that character to destroy.` :
+      pend.stage==='melt'    ? `Melting — click ${2-pend.picks.length} more material${pend.picks.length===1?'':'s'} in your hand to put back.` :
+    pend.stage==='scrap'   ? (SLIM ? 'Scrapping — click a CHARACTER in your hand to break it into one material of a type you name.'
+                                     : 'Scrapping — click a CHARACTER in your hand to break it into one material of its type, or a character on your SHELF to reclaim its remaining materials.') :
+      pend.stage==='tool'    ? `Choose one of your characters to carry ${G.you.hand[pend.i]}.` : null;
+    if(msg){
+      pr.className='prompt';
+      const t=document.createElement('span'); t.textContent=msg; pr.appendChild(t);
+      if(pend.stage==='scrap'||pend.stage==='target'||pend.stage==='melt'||pend.stage==='tool'){
+        const cx=document.createElement('button'); cx.className='warn'; cx.style.marginLeft='10px';
+        const midMove = pend.stage==='target' && pend.hit.length>0;
+        cx.textContent = midMove ? 'No more targets' : 'Cancel';
+        cx.onclick = pend.stage==='target' ? cancelTarget : ()=>{pend=null;sel=null;render();};
+        pr.appendChild(cx);
+      }
+    } else pr.className='';
+  }
+
+  const bn=document.getElementById('banner');
+  bn.replaceChildren();
+  if(over){ bn.className='banner'; bn.textContent = (G.winner===G.you?'You win.':'Bot wins.'); }
+  else bn.className='';
+}
+
+/* ============================ HUMAN INPUT ============================ */
+function startMove(slot,mi){
+  const ch=G.you.shelf[slot], mv=C[ch.name].m[mi];
+  sel={k:'shelf',i:slot};
+  // A move that prints no damage acts on your own board and needs no target. Everything
+  // else is an attack first; its own-side rider is applied by finishMove.
+  if(mv.d===0 && !mv.calc && OWN_SIDE.has(mv.fx)){ payBurn(G.you,ch,mv); return finishMove(G.you,ch,mv,G.bot,-1,false); }
+  pend={stage:'target',slot,mi,left:(mv.fx==='two'?2:mv.fx==='all'?3:1),hit:[],paid:false};
+  render();
+}
+function chooseTarget(t){
+  const ch=G.you.shelf[pend.slot], mv=C[ch.name].m[pend.mi];
+  if(pend.hit.includes(t)) return;
+  pend.target=t;
+  // The burn is paid once, when you commit to the first target — not when you click the move.
+  if(!pend.paid){ payBurn(G.you,ch,mv); pend.paid=true; }
+  const tg=G.bot.shelf[t];
+  const pierce=mv.fx==='pierce';
+  if(!pierce && immuneTo(tg)===mv.t){ say('you',`${tg.name} shrugs off ${mv.t}.`); return afterHit(false); }
+  if(tg.thimble){ tg.thimble=false; say('sys','Thimble blocks it.'); return afterHit(false); }
+  if(mv.fx==='toolFirst'&&tg.tool){ G.bot.discard.push(tg.tool); say('you',`Dent destroys ${tg.tool}.`); tg.tool=null; return afterHit(false); }
+  const n=Math.min(incoming(G.bot,tg,moveDmg(G.you,ch,mv,tg)),tg.stack.length);
+  if(n<=0) return afterHit(false);
+  if(tg.tool==='Lacquer'||tg.sealed){ destroyMaterials(G.bot,t,autoPick(tg,n,true)); return afterHit(checkBreak(G.you,G.bot,t)); }
+  pend.stage='destroy'; pend.slot2=t; pend.defIsYou=false; pend.n=n; pend.picks=[];
+  render();
+}
+function pickMat(i){
+  if(pend.picks.includes(i)) return;
+  pend.picks.push(i);
+  if(pend.picks.length>=pend.n){
+    const t=pend.slot2; const had=G.bot.shelf[t].stack.some(s=>s.under==='Shard');
+    destroyMaterials(G.bot,t,pend.picks.slice());
+    const broke=checkBreak(G.you,G.bot,t);
+    if(broke&&had){ const a=G.you.shelf[pend.slot]; if(a){ destroyMaterials(G.you,pend.slot,autoPick(a,1,true)); say('sys','Shard underneath: 1 back at you.'); checkBreak(G.bot,G.you,pend.slot);} }
+    pend.stage='target'; afterHit(broke); return;
+  }
+  render();
+}
+function afterHit(broke){
+  const ch=G.you.shelf[pend.slot];
+  if(!ch){ pend=null; sel=null; render(); return; }
+  const mv=C[ch.name].m[pend.mi];
+  pend.hit.push(pend.target); pend.left--;
+  pend.broke = pend.broke || broke;
+  // A second target only if there is one you are allowed to hit (Sentry Bell may forbid it).
+  const must=mustTarget(G.bot);
+  if(pend.left>0 && G.bot.shelf.some((s,i)=>s&&!pend.hit.includes(i)&&(must===null||must===i))){ pend.stage='target'; render(); return; }
+  finishMove(G.you,ch,mv,G.bot,pend.target,pend.broke);
+}
+/* Leaving target mode. Before the first hit that is a plain cancel; after it, the move
+   has already happened, so it finishes and is paid for rather than being handed back. */
+function cancelTarget(){
+  if(pend&&pend.stage==='target'&&pend.hit.length){
+    const ch=G.you.shelf[pend.slot];
+    if(ch) return finishMove(G.you,ch,C[ch.name].m[pend.mi],G.bot,pend.target,pend.broke);
+  }
+  pend=null; sel=null; render();
+}
+function simpleHit(p,slot,mv,t){
+  const tg=G.bot.shelf[t]; if(!tg) return;
+  if(immuneTo(tg)===mv.t) { say('sys',`${tg.name} shrugs off ${mv.t}.`); return; }
+  if(tg.thimble){tg.thimble=false;return;}
+  destroyMaterials(G.bot,t,autoPick(tg,Math.min(incoming(G.bot,tg,mv.d),tg.stack.length),false));
+  checkBreak(p,G.bot,t);
+}
+
+/* Prize items reach for the material deck rather than the hand, so they need this. */
+function pullMats(p,type,n){
+  let got=0;
+  for(let k=0;k<n;k++){
+    const mi=p.matDeck.findIndex(m=>m.mat===type);
+    if(mi<0) break;
+    p.hand.push(p.matDeck.splice(mi,1)[0]); got++;
+  }
+  return got;
+}
+
+function playItem(i){
+  const you=G.you, name=you.hand[i];
+  if(G.moves<=0){ say('sys','No moves left.'); render(); return; }
+  if(ITEM[name].tool){
+    // You choose who carries it. Nothing is spent until it is actually attached.
+    const open=[0,1,2].filter(s=>you.shelf[s]&&!you.shelf[s].tool);
+    if(!open.length){ say('sys','No character without a Tool.'); render(); return; }
+    pend={stage:'tool',i};
+    if(open.length===1) return toolTo(open[0]);
+  } else if(name==='Rummage'){
+    you.hand.splice(i,1); drawMain(you); drawMain(you); you.discard.push(name);
+    you.items++; G.moves--; say('you','You play Rummage.');
+  } else if(name==='Bubble'){
+    you.hand.splice(i,1); you.discard.push(name); you.anyGrow=true;
+    you.items++; G.moves--; say('you','Bubble — a prize may grow from any character of its material this turn.');
+  } else if(name==='Ambush'){
+    you.hand.splice(i,1); you.discard.push(name); you.growFresh=true;
+    you.items++; G.moves--; say('you','Ambush — you may grow onto a character built this turn.');
+  } else if(name==='Beach Ball'){
+    you.hand.splice(i,1); you.discard.push(name);
+    pend={stage:'beachball'}; you.items++; G.moves--;
+  } else if(name==='Dust Mite'){
+    if(!you.deck.length){ say('sys','Your main deck is empty.'); render(); return; }
+    you.hand.splice(i,1); you.discard.push(name);
+    pend={stage:'dustmite',cards:you.deck.splice(0,5)}; you.items++; G.moves--;
+  } else if(name==='Lock'){
+    if(!you.discard.some(c=>isChar(c))){ say('sys','No character in your discard pile.'); render(); return; }
+    you.hand.splice(i,1); you.discard.push(name);
+    pend={stage:'lock'}; you.items++; G.moves--;
+  } else if(name==='Glue Pot'){
+    // askPut refuses, and says why, if there is no material or nobody has room
+    if(!askPut({self:null,only:null,left:1,who:'Glue Pot'})){ render(); return; }
+    you.hand.splice(i,1); you.discard.push(name);
+    you.items++; G.moves--;
+  }
+  sel=null; render();
+}
+function toolTo(slot){
+  const you=G.you, ch=you.shelf[slot], name=you.hand[pend.i];
+  if(!ch||ch.tool){ pend=null; render(); return; }
+  you.hand.splice(pend.i,1); ch.tool=name;
+  if(name==='Thimble') ch.thimble=true;
+  you.items++; G.moves--; say('you',`You attach ${name} to ${ch.name}.`);
+  pend=null; sel=null; render();
+}
+function beachBallTo(type){
+  const you=G.you;
+  const got=pullMats(you,type,3);
+  say('you',`Beach Ball fetches ${got} ${type}${got===1?'':'s'}.`);
+  pend=null; render();
+}
+function dustMiteTake(idx){
+  const you=G.you, card=pend.cards[idx];
+  you.hand.push(card);
+  pend.cards.filter((_,k)=>k!==idx).forEach(c=>you.deck.push(c));
+  you.deck=shuffle(you.deck);
+  say('you',`Dust Mite turns up ${card}.`);
+  pend=null; render();
+}
+function lockTake(idx){
+  const you=G.you, card=you.discard[idx];
+  you.discard.splice(idx,1); you.hand.push(card);
+  say('you',`Lock brings ${card} back.`);
+  pend=null; render();
+}
+
+/* ---- MELTING ---------------------------------------------------------------
+   Free, once a turn: put two materials of any types back and take one of a type
+   you name. The answer to holding four Cloth when what you need is a Clay. It
+   costs you resources rather than tempo, and adds nothing to the table.      */
+function meltPick(i){
+  const you=G.you, c=you.hand[i];
+  if(!c.mat){ say('sys','Melt materials, not cards.'); render(); return; }
+  if(pend.picks.includes(i)) return;
+  pend.picks.push(i);
+  if(pend.picks.length>=2) pend.stage='meltTo';
+  render();
+}
+function meltTo(type){
+  const you=G.you;
+  const gone=pend.picks.map(i=>you.hand[i].mat);
+  pend.picks.slice().sort((a,b)=>b-a).forEach(i=>you.hand.splice(i,1));
+  gone.forEach(t=>toScrap(you,t));
+  you.hand.push({mat:type});
+  you.meltUsed=true; pend=null; sel=null;
+  say('you',`You melt ${gone.join(' + ')} down into a ${type}.`);
+  render();
+}
+/* what type is this player short of? the one blocking the most cards in hand */
+function mostWanted(p){
+  const have={}; handMats(p).forEach(x=>have[x.c.mat]=(have[x.c.mat]||0)+1);
+  const need={};
+  p.hand.filter(isChar).forEach(n=>{
+    const r=C[n].r;
+    for(const t in r){ const short=r[t]-(have[t]||0); if(short>0) need[t]=(need[t]||0)+short; }
+  });
+  return Object.keys(need).sort((a,b)=>need[b]-need[a])[0]||null;
+}
+function botMelt(p){
+  if(SLIM||p.meltUsed) return false;
+  const want=mostWanted(p); if(!want) return false;
+  const have={}; handMats(p).forEach(x=>have[x.c.mat]=(have[x.c.mat]||0)+1);
+  // spend from types we have spare of, never from the type we're chasing
+  const spare=handMats(p).filter(x=>x.c.mat!==want)
+    .sort((a,b)=>have[b.c.mat]-have[a.c.mat]);
+  if(spare.length<2) return false;
+  const take=spare.slice(0,2);
+  const gone=take.map(x=>x.c.mat);
+  take.map(x=>x.i).sort((a,b)=>b-a).forEach(i=>p.hand.splice(i,1));
+  gone.forEach(t=>toScrap(p,t));
+  p.hand.push({mat:want});
+  p.meltUsed=true;
+  say('bot',`Bot melts ${gone.join(' + ')} into a ${want}.`);
+  return true;
+}
+
+function scrapFromHand(i){
+  const you=G.you, c=you.hand[i];
+  if(c.mat){ say('sys','Materials cannot be scrapped — they already are materials.'); return; }
+  if(!isChar(c)){ say('sys','Tools and Notions cannot be scrapped. Only characters.'); return; }
+  // Slim rules: you name the material. Full rules: you get the character's own type.
+  if(SLIM){ pend={stage:'scrapTo',i}; render(); return; }
+  scrapInto(i,C[c].t);
+}
+function scrapInto(i,type){
+  const you=G.you, c=you.hand[i];
+  you.hand.splice(i,1);
+  // A prize character you can never grow shouldn't rot in hand: it comes apart for two.
+  const yield_ = C[c].prize ? 2 : 1;
+  for(let k=0;k<yield_;k++) you.hand.push({mat:type});
+  you.discard.push(c);
+  you.scrapUsed=true; pend=null; sel=null;
+  say('you',`You take ${c} apart for ${yield_===2?'two '+type+'s':'a '+type}.`);
+  render();
+}
+function scrapFromShelf(slot){
+  const you=G.you, ch=you.shelf[slot]; if(!ch) return;
+  const mats=ch.stack.filter(s=>!s.under).map(s=>s.t);
+  const unders=ch.stack.filter(s=>s.under).map(s=>s.under);
+  mats.forEach(t=>you.hand.push({mat:t}));
+  unders.forEach(b=>you.hand.push(b));           // the card underneath comes back too
+  if(ch.tool) you.discard.push(ch.tool);
+  you.discard.push(ch.name); you.shelf[slot]=null;
+  you.scrapUsed=true; pend=null; sel=null;
+  const bits=[];
+  if(mats.length) bits.push(`${mats.length} material${mats.length===1?'':'s'}`);
+  if(unders.length) bits.push(unders.join(' and '));
+  say('you',`You take ${ch.name} apart${bits.length?', reclaiming '+bits.join(' and '):' — nothing left to reclaim'}.`);
+  render();
+}
+document.getElementById('btnScrap').onclick=()=>{
+  if(over||G.actor!=='you'||G.you.scrapUsed) return;
+  pend = (pend&&pend.stage==='scrap') ? null : {stage:'scrap'};
+  sel=null; render();
+};
+
+document.getElementById('btnMelt').onclick=()=>{
+  if(over||G.actor!=='you'||G.you.meltUsed) return;
+  if(handMats(G.you).length<2){ say('sys','You need two materials in hand to melt.'); render(); return; }
+  pend = (pend&&(pend.stage==='melt'||pend.stage==='meltTo')) ? null : {stage:'melt',picks:[]};
+  sel=null; render();
+};
+function scrapNote(p){
+  if(!SCRAP_RULE||SLIM) return '';
+  const have={}; p.scrap.forEach(t=>have[t]=(have[t]||0)+1);
+  const bits=Object.keys(have).map(t=>have[t]+' '+t);
+  return ' · scrap pile '+(bits.length?bits.join(', '):'empty');
+}
+document.getElementById('btnSalv').onclick=()=>{
+  if(over||G.actor!=='you'||G.you.salvUsed||!SCRAP_RULE||!G.you.scrap.length) return;
+  pend = (pend&&pend.stage==='salvage') ? null : {stage:'salvage'};
+  sel=null; render();
+};
+document.getElementById('scrapRule').onchange=function(){ SCRAP_RULE=!!this.checked; newGame(); };
+document.getElementById('slimRule').onchange=function(){ SLIM=!!this.checked; newGame(); };
+document.getElementById('btnEnd').onclick=()=>{ if(!over&&G.actor==='you'){ sel=null;pend=null; endTurn(); } };
+(function deckMenu(){
+  const sel=document.getElementById('deckPick');
+  sel.innerHTML=Object.keys(DECKS).map(k=>
+    `<option value="${k}">${DECKS[k].name} — ${k}</option>`).join('');
+  sel.value=YOUR_DECK;
+  sel.onchange=()=>{ YOUR_DECK=sel.value; newGame(); };
+})();
+document.getElementById('btnNew').onclick=newGame;
+
+/* ---- tester mode: a first-visit tutorial, and three questions when a game ends ---- */
+function el(tag,text,cls){ const e=document.createElement(tag); if(text) e.textContent=text; if(cls) e.className=cls; return e; }
+function showTutorial(){
+  const box=document.getElementById('overlay'); box.replaceChildren();
+  const sh=el('div',null,'sheet');
+  sh.appendChild(el('h2','How to play Scrapkin — two minutes'));
+  const ol=el('ol');
+  [ 'Your characters are built out of material cards, and those materials are their health. To build one, click it in your hand, then click an empty space on your shelf.',
+    'Each turn you draw 1 card and 2 materials, then take 3 moves. A move is: build a character, grow one, use a character\'s move, or play an item.',
+    'Every character has a free move and a burn move. A burn move hits harder but burns materials off your own character to fire. Click a move on one of your characters, then click an enemy.',
+    'When you hit, YOU choose which of their materials to destroy. A move stops working when the material it needs is gone.',
+    'A character with no materials left is broken, and you take a prize card. Take all 6 of your prizes to win.',
+    'Some characters grow: click one in your hand, then the character it grows from on your shelf. Growing is cheaper than building, and prize characters can only be grown.',
+    'Stuck? Once a turn you may scrap a character from your hand into a material of any type. If your whole shelf gets broken, your next turn is a rebuild turn: 4 moves, and what you build can act straight away.',
+  ].forEach(t=>ol.appendChild(el('li',t)));
+  sh.appendChild(ol);
+  const go=el('button','Start playing','go'); go.onclick=()=>{ box.replaceChildren(); try{ localStorage.setItem('scrapkin-seen','1'); }catch(e){} };
+  sh.appendChild(go);
+  box.appendChild(sh);
+}
+function showFeedback(){
+  const box=document.getElementById('overlay'); box.replaceChildren();
+  const sh=el('div',null,'sheet'), ans={fun:null,again:null};
+  sh.appendChild(el('h2',(G.winner===G.you?'You won.':'The bot won.')+' Three quick questions — they decide what changes next.'));
+  const pick=(key,label,opts)=>{
+    sh.appendChild(el('div',label,'q'));
+    const row=el('div',null,'row');
+    opts.forEach(o=>{ const b=el('button',o); b.onclick=()=>{ ans[key]=o; [...(row.children||[])].forEach(x=>x.className=''); b.className='on'; }; row.appendChild(b); });
+    sh.appendChild(row);
+  };
+  pick('fun','1. How much fun was that?',['1 — not at all','2','3','4','5 — a lot']);
+  sh.appendChild(el('div','2. Where were you bored, confused or annoyed?','q'));
+  const ta=document.createElement('textarea'); sh.appendChild(ta);
+  pick('again','3. Would you play again?',['Yes','Maybe','No']);
+  const out=el('div',null,'note'); out.style.marginTop='10px';
+  const text=()=>[
+    'Scrapkin v2 playtest',
+    'Rules: '+(SLIM?'slim':'full')+' | Deck: '+G.you.name+' vs '+G.bot.name+' | Result: '+(G.winner===G.you?'won':'lost')+' on turn '+G.turn,
+    'Prizes taken: me '+(6-G.you.prize.length)+', bot '+(6-G.bot.prize.length)+' | burn moves: '+(G.you.burns||0)+' | free moves: '+(G.you.frees||0)+' | grows: '+G.you.grows+' | rebuild turns: '+(G.you.rushes||0),
+    'Fun: '+(ans.fun||'-'), 'Bored / confused / annoyed: '+(ta.value||'-'), 'Play again: '+(ans.again||'-') ].join('\n');
+  const row=el('div',null,'row'); row.style.marginTop='12px';
+  const copy=el('button','Copy my answers','go');
+  copy.onclick=()=>{ const t=text();
+    const done=()=>{ out.textContent='Copied. Please paste it to whoever sent you this link — thank you!'; };
+    if(typeof navigator!=='undefined'&&navigator.clipboard) navigator.clipboard.writeText(t).then(done,()=>{ ta.value=t; out.textContent='Could not copy automatically — the text is in the box above, select it and copy.'; });
+    else { ta.value=t; out.textContent='The text is in the box above — select it and copy.'; } };
+  row.appendChild(copy);
+  if(FEEDBACK_URL){ const a=el('a'); a.href=FEEDBACK_URL; a.target='_blank'; a.rel='noopener'; a.appendChild(el('button','Open the feedback form')); row.appendChild(a); }
+  const again=el('button','Play another game'); again.onclick=()=>{ box.replaceChildren(); newGame(); }; row.appendChild(again);
+  sh.appendChild(row); sh.appendChild(out);
+  box.appendChild(sh);
+}
+if(TESTER){
+  const how=el('button','How to play'); how.onclick=showTutorial;
+  document.getElementById('btnNew').parentNode && document.getElementById('btnNew').parentNode.appendChild(how);
+  let seen=false; try{ seen=!!localStorage.getItem('scrapkin-seen'); }catch(e){}
+  if(!seen) showTutorial();
+}
+
+/* Which picture each card is currently using. */
+(function listArt(){
+  const inDecks=new Set();
+  for(const k in DECKS){ DECKS[k].main.forEach(n=>inDecks.add(n)); DECKS[k].prize.forEach(n=>inDecks.add(n)); }
+  ITEMS6.forEach(n=>inDecks.add(n));
+  const cards=[...inDecks].sort();
+  const rows=cards.map(n=>{
+    const f=ART_MAP[n];
+    return `<b>${n}</b> — ${f? f.replace('art/','') : '<i>no picture ('+slug(n)+ART_EXT+')</i>'}`;
+  });
+  document.getElementById('artList').innerHTML =
+    `Pictures live in <code>art/</code> and are matched by the map at the top of this file's script.<br>`
+  + `To swap one, edit its line there. To pick up newly added files, run <code>node map-art.js</code>.<br>`
+  + `Art shows <b>4:3 on the table</b> and <b>16:9 in hand</b> — keep the subject central.<br><br>`
+  + `<b>${cards.length} cards in the two decks:</b><br>` + rows.join('<br>');
+})();
+
+newGame();
+</script>
+</body>
+</html>
