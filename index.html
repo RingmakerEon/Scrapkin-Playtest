@@ -1974,9 +1974,9 @@ function showMenu(){
   const box=el('div',null,'menu-box');
   box.appendChild(el('h1','Scrapkin'));
   box.appendChild(el('div','a toy-box card game for two — playtest','sub'));
-  box.appendChild(el('div','Play against','lab'));
+  box.appendChild(el('div','Game mode','lab'));
   const modes=el('div',null,'menu-row'); modes.style.marginTop='0';
-  [['The computer',false],['A friend, on this screen',true]].forEach(([t,hs])=>{
+  [['Against the computer',false],['Against friend (same device)',true]].forEach(([t,hs])=>{
     const b=el('button',t,HOTSEAT===hs?'go':''); b.onclick=()=>{ HOTSEAT=hs; showMenu(); }; modes.appendChild(b); });
   box.appendChild(modes);
   box.appendChild(el('div',HOTSEAT?'Player 1, pick your deck — Player 2 plays the other':'Pick your deck','lab'));
