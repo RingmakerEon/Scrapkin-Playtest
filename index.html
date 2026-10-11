@@ -95,7 +95,7 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 .slot{display:flex;flex-direction:column;align-items:stretch;gap:0;position:relative}
 .ch{
   background:transparent; color:var(--cink);
-  padding:0; display:flex; flex-direction:column; position:relative;
+  padding:0; display:flex; flex-direction:column; position:relative; z-index:2;
   filter:drop-shadow(0 6px 12px rgba(0,0,0,.5));
   transition:transform .12s ease, filter .12s ease;
 }
@@ -128,7 +128,7 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 }
 
 /* the material stack, drawn as card edges tucked under the character */
-.stack{display:flex;justify-content:center;padding:0 4px;margin-top:-4px}
+.stack{display:flex;justify-content:center;align-items:flex-start;padding:0 4px;margin-top:-4px;position:relative;z-index:1}
 .mat{
   width:48px;height:42px;border-radius:0 0 6px 6px;margin:0 -5px;
   position:relative;overflow:hidden;cursor:default;
@@ -144,6 +144,13 @@ button.warn{border-color:var(--warn);color:var(--warn)}
 .mat.pick{cursor:pointer;outline:2px solid var(--ink);outline-offset:1px;z-index:2}
 .mat.picked{opacity:.28;outline:2px dashed var(--bad);outline-offset:1px}
 .mat.under{box-shadow:0 3px 7px rgba(0,0,0,.45), inset 0 0 0 2px var(--ink)}
+.understrip{position:relative;z-index:0;padding:9px 11px 7px;border-radius:0 0 11px 11px;
+  font-size:12.5px;line-height:1.28;color:#2A211C;background-color:#F6EEE1;
+  background-size:100% auto,100% auto;background-position:center bottom,center bottom;
+  box-shadow:0 4px 9px rgba(0,0,0,.5)}
+.understrip b{font-size:13.5px}
+.toolmini{width:74px;margin:5px 0 0 12px;flex:none;position:relative;z-index:3;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.6));transform:rotate(4deg)}
 .stackempty{font-size:10px;color:var(--bad);text-align:center;padding:4px 0}
 
 .mvrow{border-top:1px solid rgba(0,0,0,.12);padding-top:4px;margin-top:1px}
@@ -278,7 +285,7 @@ button.warn{border-color:var(--warn);color:var(--warn)}
     <hr style="border:0;border-top:1px solid var(--line)">
     <div class="ring" id="v2Wrap">
       <b>What's different in v2</b><br>
-      Every character has a <b>free move</b> and a <b>burn move</b>. A burn move takes materials
+      Some characters have a <b>burn move</b> beside their free move; seeds have an <b>underneath</b> effect instead. A burn move takes materials
       off the character's own stack to fire — so hitting hard costs you health, and can switch
       off your own moves.<br>
       Some moves <b>read the stack</b>: 1 damage for each Cloth underneath, more while you are
@@ -566,6 +573,10 @@ function canGrowOnto(name,base,p){
    means anything if there is a cap. This is it: an effect may top a character back up to
    its recipe, but never past it. Materials inherited by growing are left alone, or the
    whole growth ladder would break. Turns Layer/Set/Glaze/Stuff/Mend into repair moves. */
+/* Does this character have a card underneath with this effect? The effect belongs to the
+   card that was grown onto, and keeps working however many times you grow on top of it —
+   until that card is destroyed like any other material. */
+function hasUnder(ch,kind){ return !!ch && ch.stack.some(s=>s.under && C[s.under] && C[s.under].ue===kind); }
 function roomOn(ch){
   if(!ch) return false;
   const need=Object.values(C[ch.name].r).reduce((a,b)=>a+b,0);
@@ -585,13 +596,13 @@ function growChar(p,handIdx,slot){
   if(!canPay(p,def.r,have)) return false;
   p.hand.splice(handIdx,1);
   const extra=payFrom(p,def.r,have);
-  p.shelf[slot]={name,stack:stack.concat(extra),tool:base.tool?null:null,
-                 fresh:false,used:false,smothered:false,thimble:false};
-  if(base.tool){ p.discard.push(base.tool); say('sys',`${base.tool} falls off ${base.name}.`); }
+  // The Tool stays where it is: it was attached to the thing on the shelf, and that thing is still there.
+  p.shelf[slot]={name,stack:stack.concat(extra),tool:base.tool||null,
+                 fresh:false,used:false,smothered:false,thimble:!!base.thimble};
   p.grows++;
   // Ferro underneath: growing on top of it is free. The callers decrement a move after
   // this returns, so hand it back here rather than changing all of them.
-  if(base.name==='Ferro'){ G.moves++; say('sys','Ferro underneath: growing costs no move.'); }
+  if(C[base.name].ue==='freeGrow' || base.name==='Ferro'){ G.moves++; say('sys',`${base.name} underneath: growing costs no move.`); }
   say(p.isBot?'bot':'you',`${p.name} grows ${base.name} into ${name}.`);
   if(p.shelf.every(Boolean)&&p.shelfFull===null) p.shelfFull=G.turn;
   return true;
@@ -627,7 +638,7 @@ function destroyMaterials(defP,slot,idxs){
     // Cuppy underneath: just remember it got hurt. The patching happens at the start of
     // its owner's next turn, which is what keeps attack resolution uninterruptible —
     // nothing has to stop mid-attack to ask anybody anything.
-    if(ch.stack.some(s=>s.under==='Cuppy')) ch.cuppyHurt=true;
+    if(hasUnder(ch,'patch')) ch.cuppyHurt=true;
   });
   // Craze asks whether this hit took the defender's last own-type material. Only the
   // player being attacked counts — Shard's thorns land on the attacker and must not.
@@ -684,7 +695,7 @@ function startTurn(){
     if(ch.cuppyHurt){ ch.cuppyHurt=false;
       const ci=p.hand.findIndex(c=>c.mat==='clay');
       if(ci>=0&&roomOn(ch)){ p.hand.splice(ci,1); ch.stack.push({t:'clay',under:null});
-        say('sys',`Cuppy underneath: ${ch.name} is patched with a Clay.`); }
+        say('sys',`Underneath: ${ch.name} is patched with a Clay.`); }
     }
   } });
   // draw
@@ -857,12 +868,12 @@ function applyFx(p,ch,mv,defP,slot,broke){
   }
   if(f==='extraPrize'&&broke) takePrizes(p,1);
   // Patch underneath — draw when this character breaks an enemy
-  if(broke && ch.stack.some(s=>s.under==='Patch')) { drawMain(p); say('sys','Patch underneath: draw a card.'); }
+  if(broke && hasUnder(ch,'drawOnBreak')) { drawMain(p); say('sys','Underneath: draw a card for the break.'); }
 }
 
 function thornsCheck(defP,slot,attP,attSlot){
   const ch=defP.shelf[slot];
-  if(ch && ch.stack.some(s=>s.under==='Shard')) return true;
+  if(hasUnder(ch,'thorns')) return true;
   return false;
 }
 
@@ -891,7 +902,7 @@ function strike(p,mySlot,mv,defP,targetSlot){
   if(mv.fx==='toolFirst' && t.tool){ defP.discard.push(t.tool); say(p.isBot?'bot':'you',`Dent destroys ${t.tool}.`); t.tool=null; return false; }
   const n=Math.min(incoming(defP,t,mv.d),t.stack.length);
   if(n<=0) return false;
-  const hadThorns = t.stack.some(s=>s.under==='Shard');
+  const hadThorns = hasUnder(t,'thorns');
   destroyMaterials(defP,targetSlot,autoPick(t,n, t.tool==='Lacquer'||t.sealed));
   const broke=checkBreak(p,defP,targetSlot);
   if(broke && hadThorns) applyThorns(defP,p,mySlot);
@@ -916,7 +927,7 @@ function resolveAttack(p,mySlot,mv,defP,targetSlot,onNeedPicks){
 function applyThorns(defP,attP,attSlot){
   const a=attP.shelf[attSlot]; if(!a) return;
   const idxs=autoPick(a,1,true); destroyMaterials(attP,attSlot,idxs);
-  say('sys','Shard underneath: 1 damage back to the attacker.');
+  say('sys','Underneath: 1 damage back to the attacker.');
   checkBreak(defP,attP,attSlot);
 }
 /* defender-favouring pick when Lacquer, attacker-favouring otherwise */
@@ -1476,7 +1487,26 @@ function chEl(p,slot,isYou){
   if(!ch.stack.length){ const e=document.createElement('div'); e.className='stackempty'; e.textContent='nothing left'; st.appendChild(e); }
 
   const wrap=document.createElement('div'); wrap.className='slot';
-  wrap.appendChild(d); wrap.appendChild(st);
+  wrap.appendChild(d);
+  // Every card this one was grown onto shows its bottom edge underneath, newest first.
+  // A seed's edge carries its Underneath line, so the effect is readable on the table.
+  ch.stack.filter(m=>m.under).reverse().forEach((m,k)=>{
+    const u=C[m.under]; if(!u) return;
+    const strip=document.createElement('div'); strip.className='understrip';
+    const fr=ART_FRAME[u.t];
+    if(fr) strip.style.backgroundImage="linear-gradient(rgba(255,250,244,.80),rgba(255,250,244,.80)),url('"+encPath(fr)+"')";
+    strip.style.margin='-5px '+(12+k*8)+'px 0';
+    const nm=document.createElement('b'); nm.textContent=m.under+(u.seed?' [seed]':''); strip.appendChild(nm);
+    if(u.underTxt){ const t=document.createElement('span'); t.textContent=' Underneath: '+u.underTxt; strip.appendChild(t); }
+    strip.onmouseenter=()=>showZoom(m.under,null); strip.onmouseleave=hideZoom;
+    wrap.appendChild(strip);
+  });
+  wrap.appendChild(st);
+  if(ch.tool && ITEM[ch.tool]){                 // a small copy of the Tool, tucked at the corner
+    const mini=document.createElement('div'); mini.className='toolmini';
+    mini.appendChild(cardFace(ch.tool));
+    st.appendChild(mini);
+  }
   return wrap;
 }
 
@@ -1544,7 +1574,7 @@ function render(){
   document.getElementById('sItems').textContent=you.items;
   document.getElementById('turnInfo').textContent = over?'game over':(G.actor==='you'?`${HOTSEAT?you.label+"'s turn":'your turn'} · ${G.moves} moves${you.rush?' · rebuild turn':''}`:(ONLINE?bot.label+"'s turn":'bot thinking…'));
   if(TESTER){ ['slimWrap','scrapRuleWrap','artWrap','v2Wrap','immWrap'].forEach(id=>{ document.getElementById(id).style.display='none'; });
-    if(over && !G.asked){ G.asked=true; showFeedback(); } }
+    if(over && !G.asked && FEEDBACK_URL){ G.asked=true; showFeedback(); } }
   document.getElementById('btnEnd').disabled = over||G.actor!=='you'||(pend&&pend.stage==='draw');
   document.getElementById('btnScrap').disabled = over||G.actor!=='you'||you.scrapUsed||!!pend;
   const sv=document.getElementById('btnSalv');
@@ -1698,10 +1728,10 @@ function pickMat(i){
   if(pend.picks.includes(i)) return;
   pend.picks.push(i);
   if(pend.picks.length>=pend.n){
-    const t=pend.slot2; const had=G.bot.shelf[t].stack.some(s=>s.under==='Shard');
+    const t=pend.slot2; const had=hasUnder(G.bot.shelf[t],'thorns');
     destroyMaterials(G.bot,t,pend.picks.slice());
     const broke=checkBreak(G.you,G.bot,t);
-    if(broke&&had){ const a=G.you.shelf[pend.slot]; if(a){ destroyMaterials(G.you,pend.slot,autoPick(a,1,true)); say('sys','Shard underneath: 1 back at you.'); checkBreak(G.bot,G.you,pend.slot);} }
+    if(broke&&had){ const a=G.you.shelf[pend.slot]; if(a){ destroyMaterials(G.you,pend.slot,autoPick(a,1,true)); say('sys','Underneath: 1 damage back at you.'); checkBreak(G.bot,G.you,pend.slot);} }
     pend.stage='target'; afterHit(broke); return;
   }
   render();
@@ -1939,10 +1969,10 @@ function showTutorial(){
   const ol=el('ol');
   [ 'Your characters are built out of material cards, and those materials are their health. To build one, click it in your hand, then click an empty space on your shelf.',
     'Each turn you draw 1 card and 2 materials, then take 3 moves. A move is: build a character, grow one, use a character\'s move, or play an item.',
-    'Every character has a free move and a burn move. A burn move hits harder but burns materials off your own character to fire. Click a move on one of your characters, then click an enemy.',
+    'To use a move, click it on one of your characters, then click an enemy. Some characters have a burn move: it hits harder, but burns materials off your own character to fire.',
     'When you hit, YOU choose which of their materials to destroy. A move stops working when the material it needs is gone.',
     'A character with no materials left is broken, and you take a prize card. Take all 6 of your prizes to win.',
-    'Some characters grow: click one in your hand, then the character it grows from on your shelf. Growing is cheaper than building, and prize characters can only be grown.',
+    'Some characters grow: click one in your hand, then the character it grows from on your shelf. Growing is cheaper than building, and prize characters can only be grown. A seed has an Underneath effect that switches on once something is grown on top of it. Tools stay attached when a character grows.',
     'Stuck? Once a turn you may scrap a character from your hand into a material of any type. If your whole shelf gets broken, your next turn is a rebuild turn: 4 moves, and what you build can act straight away.',
   ].forEach(t=>ol.appendChild(el('li',t)));
   sh.appendChild(ol);
@@ -1952,35 +1982,12 @@ function showTutorial(){
 }
 function showFeedback(){
   const box=document.getElementById('overlay'); box.replaceChildren();
-  const sh=el('div',null,'sheet'), ans={fun:null,again:null};
-  sh.appendChild(el('h2',(HOTSEAT?G.winner.label+' won.':G.winner===G.you?'You won.':ONLINE?G.winner.label+' won.':'The bot won.')+' Three quick questions — they decide what changes next.'));
-  const pick=(key,label,opts)=>{
-    sh.appendChild(el('div',label,'q'));
-    const row=el('div',null,'row');
-    opts.forEach(o=>{ const b=el('button',o); b.onclick=()=>{ ans[key]=o; [...(row.children||[])].forEach(x=>x.className=''); b.className='on'; }; row.appendChild(b); });
-    sh.appendChild(row);
-  };
-  pick('fun','1. How much fun was that?',['1 — not at all','2','3','4','5 — a lot']);
-  sh.appendChild(el('div','2. Where were you bored, confused or annoyed?','q'));
-  const ta=document.createElement('textarea'); sh.appendChild(ta);
-  pick('again','3. Would you play again?',['Yes','Maybe','No']);
-  const out=el('div',null,'note'); out.style.marginTop='10px';
-  const text=()=>[
-    'Scrapkin v2 playtest',
-    'Rules: '+(SLIM?'slim':'full')+' | Deck: '+G.you.name+' vs '+G.bot.name+' | Result: '+(G.winner===G.you?'won':'lost')+' on turn '+G.turn,
-    'Prizes taken: me '+(6-G.you.prize.length)+', bot '+(6-G.bot.prize.length)+' | burn moves: '+(G.you.burns||0)+' | free moves: '+(G.you.frees||0)+' | grows: '+G.you.grows+' | rebuild turns: '+(G.you.rushes||0),
-    'Fun: '+(ans.fun||'-'), 'Bored / confused / annoyed: '+(ta.value||'-'), 'Play again: '+(ans.again||'-') ].join('\n');
-  const row=el('div',null,'row'); row.style.marginTop='12px';
-  const copy=el('button','Copy my answers','go');
-  copy.onclick=()=>{ const t=text();
-    const done=()=>{ out.textContent='Copied. Please paste it to whoever sent you this link — thank you!'; };
-    if(typeof navigator!=='undefined'&&navigator.clipboard) navigator.clipboard.writeText(t).then(done,()=>{ ta.value=t; out.textContent='Could not copy automatically — the text is in the box above, select it and copy.'; });
-    else { ta.value=t; out.textContent='The text is in the box above — select it and copy.'; } };
-  row.appendChild(copy);
-  if(FEEDBACK_URL){ const a=el('a'); a.href=FEEDBACK_URL; a.target='_blank'; a.rel='noopener'; a.appendChild(el('button','Open the feedback form')); row.appendChild(a); }
-  const again=el('button','Play another game'); again.onclick=()=>{ box.replaceChildren(); newGame(); }; row.appendChild(again);
-  sh.appendChild(row); sh.appendChild(out);
-  box.appendChild(sh);
+  const sh=el('div',null,'sheet');
+  sh.appendChild(el('h2','Thanks for playing. Tell me what you thought?'));
+  const row=el('div',null,'row');
+  const a=el('a'); a.href=FEEDBACK_URL; a.target='_blank'; a.rel='noopener'; a.appendChild(el('button','Give feedback','go')); row.appendChild(a);
+  const again=el('button','Close'); again.onclick=()=>box.replaceChildren(); row.appendChild(again);
+  sh.appendChild(row); box.appendChild(sh);
 }
 /* ---- main menu: pick a deck, read the rules, leave feedback ---- */
 let STARTED=false;
